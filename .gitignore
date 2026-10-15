@@ -27,3 +27,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python / Gmail integration
+.venv/
+__pycache__/
+*.py[cod]
+backend/data/

@@ -1,4 +1,4 @@
-import { Loader2, RotateCcw, Sparkles } from 'lucide-react'
+import { FileSearch, Loader2, RotateCcw, Sparkles } from 'lucide-react'
 import type { ExtractionMethod } from '@/types'
 import type { ExtractionStatus } from '@/features/extraction/utils/extractionState'
 import { relativeTime } from '@/lib/format'
@@ -64,7 +64,7 @@ export function ExtractionToolbar({
           {method === 'gemini' ? (
             <GeminiHint status={status} lastRunAt={lastRunAt} />
           ) : (
-            <span>Captura los valores manualmente en cada campo</span>
+            <span>Lee el PDF con reglas locales y permite editar los campos</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -77,12 +77,13 @@ export function ExtractionToolbar({
           >
             Restablecer
           </Button>
-          {method === 'gemini' ? (
-            <Button
+          <Button
               size="sm"
               icon={
                 isExtracting ? (
                   <Loader2 size={14} className="animate-spin" />
+                ) : method === 'manual' ? (
+                  <FileSearch size={14} />
                 ) : (
                   <Sparkles size={14} />
                 )
@@ -90,12 +91,15 @@ export function ExtractionToolbar({
               onClick={onRun}
               disabled={!canRun}
               title={
-                canRun ? undefined : 'Adjunta un documento para poder extraer'
+                canRun
+                  ? undefined
+                  : status === 'done'
+                    ? 'El documento ya fue procesado. Restablece para ejecutarlo otra vez.'
+                    : 'Adjunta un documento para poder extraer'
               }
             >
-              {isExtracting ? 'Extrayendo…' : 'Ejecutar extracción'}
-            </Button>
-          ) : null}
+              {isExtracting ? 'Extrayendo…' : method === 'manual' ? 'Leer PDF' : 'Ejecutar extracción'}
+          </Button>
         </div>
       </div>
     </div>

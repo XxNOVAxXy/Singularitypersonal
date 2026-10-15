@@ -110,6 +110,9 @@ export function DocumentSelector({
                     <p className="truncate text-xs text-slate-500">
                       {document.insurer} · {document.client}
                     </p>
+                    <p className="mt-1 text-[10px] font-medium text-brand-600">
+                      {document.source === 'gmail' ? 'Resultado guardado en backend' : 'Datos de demostración'}
+                    </p>
                     <div className="mt-1.5 flex items-center gap-2">
                       <DocumentStatusBadge status={document.status} />
                       <span className="text-[11px] text-slate-400">

@@ -1,104 +1,78 @@
-import { Paperclip } from 'lucide-react'
+import { FileText, Mail } from 'lucide-react'
 import type { EmailMessage } from '@/types'
-import { formatDate, formatTime } from '@/lib/format'
-import { cn } from '@/lib/cn'
-import { Card } from '@/components/ui/Card'
-import { EmptyState } from '@/components/ui/EmptyState'
 
 interface EmailTableProps {
   emails: EmailMessage[]
   selectedId: string | null
-  onSelect: (id: string) => void
+  onSelect: (email: EmailMessage) => void
 }
 
 function initials(name: string): string {
   return name
-    .split(' ')
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
+    .split(/\s+/)
+    .map((part) => part[0] ?? '')
     .join('')
+    .slice(0, 2)
+    .toUpperCase()
+}
+
+function receivedLabel(email: EmailMessage): string {
+  if (email.receivedLabel) return email.receivedLabel
+  const date = new Date(email.receivedAt)
+  return Number.isNaN(date.getTime())
+    ? email.receivedAt
+    : new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: 'short' }).format(date)
 }
 
 export function EmailTable({ emails, selectedId, onSelect }: EmailTableProps) {
-  if (emails.length === 0) {
+  if (!emails.length) {
     return (
-      <Card bodyClassName="p-5">
-        <EmptyState
-          title="Sin resultados"
-          description="No se encontraron correos con los filtros actuales."
-        />
-      </Card>
+      <div className="inbox-empty">
+        <Mail size={26} />
+        <strong>No hay correos que coincidan</strong>
+        <span>Prueba otra búsqueda o cambia los filtros.</span>
+      </div>
     )
   }
 
   return (
-    <Card bodyClassName="p-0">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
-              <th className="px-5 py-3 font-medium">Remitente</th>
-              <th className="px-5 py-3 font-medium">Asunto</th>
-              <th className="hidden px-5 py-3 font-medium md:table-cell">
-                Fecha
-              </th>
-              <th className="px-5 py-3 text-center font-medium">Adjuntos</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {emails.map((email) => {
-              const active = email.id === selectedId
-              return (
-                <tr
-                  key={email.id}
-                  onClick={() => onSelect(email.id)}
-                  className={cn(
-                    'cursor-pointer transition-colors',
-                    active ? 'bg-brand-50/70' : 'hover:bg-slate-50',
-                  )}
-                >
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-600">
-                        {initials(email.fromName)}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="flex items-center gap-2 truncate font-medium text-slate-800">
-                          {!email.read ? (
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-                          ) : null}
-                          {email.fromName}
-                        </p>
-                        <p className="truncate text-xs text-slate-400">
-                          {email.fromEmail}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="max-w-[280px] px-5 py-3">
-                    <p className="truncate font-medium text-slate-700">
-                      {email.subject}
-                    </p>
-                    <p className="truncate text-xs text-slate-400">
-                      {email.preview}
-                    </p>
-                  </td>
-                  <td className="hidden whitespace-nowrap px-5 py-3 text-xs text-slate-500 md:table-cell">
-                    <p>{formatDate(email.receivedAt)}</p>
-                    <p className="text-slate-400">{formatTime(email.receivedAt)}</p>
-                  </td>
-                  <td className="px-5 py-3 text-center">
-                    <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                      <Paperclip size={13} />
-                      {email.attachments.length}
-                    </span>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+    <div className="inbox-list" role="list" aria-label="Correos">
+      <div className="inbox-list-header" aria-hidden="true">
+        <span />
+        <span>Conversación</span>
+        <span>Fecha</span>
       </div>
-    </Card>
+      {emails.map((email) => (
+        <button
+          key={email.id}
+          type="button"
+          role="listitem"
+          className={`email-row ${selectedId === email.id ? 'email-row--selected' : ''} ${!email.read ? 'email-row--unread' : ''}`}
+          onClick={() => onSelect(email)}
+        >
+          <span className="email-row-sender">
+            <span className="email-avatar" aria-hidden="true">
+              {initials(email.fromName)}
+            </span>
+            <strong title={email.fromName}>{email.fromName}</strong>
+          </span>
+          <span className="email-row-content">
+            <strong title={email.subject}>{email.subject}</strong>
+            <span title={email.preview || 'Sin contenido de texto'}>
+              {email.preview || 'Sin contenido de texto'}
+            </span>
+          </span>
+          <span className="email-row-meta">
+            <time dateTime={email.receivedAt}>{receivedLabel(email)}</time>
+            {email.hasAttachments || email.attachments.length > 0 ? (
+              <span className="email-row-attachments" aria-label={`Archivos adjuntos: ${email.attachments.length}`}>
+                <FileText size={14} />
+                {email.attachments.length || ''}
+              </span>
+            ) : null}
+          </span>
+        </button>
+      ))}
+    </div>
   )
 }

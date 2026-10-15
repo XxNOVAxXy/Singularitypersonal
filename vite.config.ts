@@ -20,6 +20,18 @@ export default defineConfig(({ mode }) => {
       // El backend se ejecuta en otro puerto; el proxy evita CORS en desarrollo
       // y mantiene la API key de Gemini fuera del frontend.
       proxy: {
+        '/api/auth': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: false,
+        },
+        '/api/gmail': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: false,
+        },
+        '/api/extractions': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: false,
+        },
         '/api': {
           target: proxyTarget,
           changeOrigin: false,

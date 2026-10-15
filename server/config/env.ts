@@ -10,6 +10,7 @@ export interface ServerEnv {
   nodeEnv: NodeEnv
   geminiApiKey: string | undefined
   geminiModel: string
+  geminiFallbackModels: string[]
   healthToken: string | undefined
 }
 
@@ -42,13 +43,27 @@ function parseNodeEnv(value: string | undefined): NodeEnv {
   return 'development'
 }
 
+function parseModelList(value: string | undefined, primary: string): string[] {
+  return [...new Set(
+    (value ?? '')
+      .split(',')
+      .map((model) => model.trim())
+      .filter((model) => model.length > 0 && model !== primary),
+  )]
+}
+
 function readEnv(): ServerEnv {
+  const geminiModel = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL
   return {
     port: parsePort(process.env.PORT),
     host: process.env.HOST?.trim() || DEFAULT_HOST,
     nodeEnv: parseNodeEnv(process.env.NODE_ENV),
     geminiApiKey: process.env.GEMINI_API_KEY?.trim() || undefined,
-    geminiModel: process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL,
+    geminiModel,
+    geminiFallbackModels: parseModelList(
+      process.env.GEMINI_FALLBACK_MODELS,
+      geminiModel,
+    ),
     healthToken: process.env.HEALTH_CHECK_TOKEN?.trim() || undefined,
   }
 }

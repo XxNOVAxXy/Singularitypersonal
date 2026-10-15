@@ -19,6 +19,9 @@ healthRouter.get('/health/gemini', geminiHealthGuard, async (_req, res) => {
   } catch (error) {
     if (error instanceof GeminiServiceError) {
       console.error(`[gemini] verificación fallida: ${error.code}`)
+      if (error.retryAfterMs !== undefined) {
+        res.setHeader('Retry-After', String(Math.ceil(error.retryAfterMs / 1000)))
+      }
       res.status(error.status).json({ ok: false, error: error.code })
       return
     }

@@ -19,7 +19,9 @@ import {
 import { toFieldKey } from '@/lib/slug'
 import {
   ExtractionServiceError,
+  downloadPdf,
   extractFromFile,
+  extractWithRules,
 } from '@/services/extractionService'
 
 export interface NewFieldInput {
@@ -27,13 +29,67 @@ export interface NewFieldInput {
   kind: FieldKind
 }
 
+interface StoredExtraction {
+  fields: ExtractionField[]
+  updatedAt: string
+}
+
+function storageKey(documentId: string, method: ExtractionMethod): string {
+  return `singularity.extraction.${method}.${encodeURIComponent(documentId)}`
+}
+
+function readStoredExtraction(
+  documentId: string,
+  method: ExtractionMethod,
+): StoredExtraction | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(storageKey(documentId, method))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<StoredExtraction>
+    return Array.isArray(parsed.fields) && typeof parsed.updatedAt === 'string'
+      ? { fields: parsed.fields, updatedAt: parsed.updatedAt }
+      : null
+  } catch {
+    return null
+  }
+}
+
+function storeExtraction(
+  documentId: string,
+  method: ExtractionMethod,
+  fields: ExtractionField[],
+): void {
+  if (typeof window === 'undefined') return
+  try {
+    const value: StoredExtraction = {
+      fields,
+      updatedAt: new Date().toISOString(),
+    }
+    window.sessionStorage.setItem(storageKey(documentId, method), JSON.stringify(value))
+  } catch {
+    // La extracción sigue funcionando aunque el almacenamiento de sesión esté lleno.
+  }
+}
+
+function clearStoredExtraction(documentId: string, method: ExtractionMethod): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(storageKey(documentId, method))
+  } catch {
+    // No bloquea el restablecimiento del formulario.
+  }
+}
+
 export function useExtraction(
   document: PolicyDocument | null,
   method: ExtractionMethod,
   attachment: File | null,
   attachmentError: string | null,
+  initialFields: ExtractionField[] | null = null,
 ) {
   const [fields, setFields] = useState<ExtractionField[]>([])
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null)
   const [runState, dispatch] = useReducer(
     reduceExtractionRunState,
     initialExtractionRunState,
@@ -55,14 +111,36 @@ export function useExtraction(
     invalidate()
     dispatch({ type: 'reset' })
     setLastRunAt(null)
+    setFallbackNotice(null)
     if (!document) {
       setFields([])
       return
     }
-    // El método manual reconstruye los campos; Gemini parte vacío y espera
-    // a que el usuario adjunte un documento y ejecute la extracción.
-    setFields(method === 'manual' ? buildManualFields(document) : [])
-  }, [document, method, attachment, invalidate])
+    const stored = readStoredExtraction(document.id, method)
+    // El método manual reconstruye los campos; una extracción de Gmail puede
+    // llegar ya resuelta desde la bandeja de entrada.
+    if (method === 'manual') {
+      setFields(buildManualFields(document))
+    } else if (attachment) {
+      // Un archivo nuevo invalida el resultado previo del documento de Gmail.
+      setFields([])
+    } else if (stored?.fields.length) {
+      setFields(stored.fields)
+      dispatch({ type: 'succeed' })
+      setLastRunAt(stored.updatedAt)
+    } else if (initialFields?.length) {
+      setFields(initialFields)
+      dispatch({ type: 'succeed' })
+      setLastRunAt(new Date().toISOString())
+    } else {
+      setFields([])
+    }
+  }, [document, method, attachment, initialFields, invalidate])
+
+  useEffect(() => {
+    if (!document || runState.status !== 'done' || fields.length === 0) return
+    storeExtraction(document.id, method, fields)
+  }, [document, method, fields, runState.status])
 
   const updateField = useCallback((key: string, value: string) => {
     setFields((current) =>
@@ -101,8 +179,13 @@ export function useExtraction(
     setFields((current) => current.filter((field) => field.key !== key))
   }, [])
 
-  const runGemini = useCallback(async () => {
-    if (method !== 'gemini' || !document || !attachment || attachmentError) return
+  const runExtraction = useCallback(async () => {
+    if (
+      !document ||
+      attachmentError ||
+      (!attachment && !document.downloadUrl) ||
+      runState.status === 'done'
+    ) return
     if (busyRef.current) return
 
     busyRef.current = true
@@ -115,18 +198,46 @@ export function useExtraction(
 
     dispatch({ type: 'start' })
     setFields([])
+    setFallbackNotice(null)
 
+    let sourceFile: File | null = null
     try {
-      const result = await extractFromFile(
-        { policyType: document.policyType, file: attachment },
+      sourceFile = attachment ?? await downloadPdf(
+        document.downloadUrl as string,
+        document.name,
         { signal: controller.signal },
       )
+      const fields = method === 'manual'
+        ? await extractWithRules(sourceFile, { signal: controller.signal }, document.policyType)
+        : (await extractFromFile(
+            { policyType: document.policyType, file: sourceFile },
+            { signal: controller.signal },
+          )).fields
       if (requestIdRef.current !== requestId) return
-      setFields(result.fields)
+      setFields(fields)
       dispatch({ type: 'succeed' })
       setLastRunAt(new Date().toISOString())
     } catch (error) {
       if (requestIdRef.current !== requestId) return
+      const canUseLocalFallback =
+        method === 'gemini' &&
+        sourceFile &&
+        error instanceof ExtractionServiceError &&
+        ['configuration_error', 'authentication_error', 'invalid_request', 'model_output_invalid', 'rate_limited', 'quota_exhausted', 'service_unavailable', 'timeout', 'upstream_error', 'network_error'].includes(error.code)
+
+      if (canUseLocalFallback && sourceFile) {
+        try {
+          const localFields = await extractWithRules(sourceFile, { signal: controller.signal }, document.policyType)
+          if (requestIdRef.current !== requestId) return
+          setFields(localFields)
+          setFallbackNotice('Gemini no está disponible. Se aplicó extracción local; revisa y edita los campos antes de guardar.')
+          dispatch({ type: 'succeed' })
+          setLastRunAt(new Date().toISOString())
+          return
+        } catch {
+          // Conserva el error original si el extractor local tampoco responde.
+        }
+      }
       const message =
         error instanceof ExtractionServiceError
           ? error.message
@@ -135,14 +246,16 @@ export function useExtraction(
     } finally {
       busyRef.current = false
     }
-  }, [method, document, attachment, attachmentError])
+  }, [method, document, attachment, attachmentError, runState.status])
 
   const reset = useCallback(() => {
     invalidate()
+    if (document) clearStoredExtraction(document.id, method)
     dispatch({ type: 'reset' })
     setLastRunAt(null)
-    setFields(document && method === 'manual' ? buildManualFields(document) : [])
-  }, [invalidate, document, method])
+    setFallbackNotice(null)
+    setFields(document && method === 'manual' ? buildManualFields(document) : initialFields ?? [])
+  }, [invalidate, document, method, initialFields])
 
   const grouped = useMemo(() => groupFields(fields), [fields])
   const summary = useMemo(() => summarizeExtraction(fields), [fields])
@@ -157,10 +270,10 @@ export function useExtraction(
 
   const isExtracting = runState.status === 'extracting'
   const canRun =
-    method === 'gemini' &&
     Boolean(document) &&
-    Boolean(attachment) &&
+    Boolean(attachment || document?.downloadUrl) &&
     !attachmentError &&
+    runState.status !== 'done' &&
     !isExtracting
 
   return {
@@ -171,13 +284,14 @@ export function useExtraction(
     json,
     status: runState.status,
     error: runState.error,
+    fallbackNotice,
     isExtracting,
     canRun,
     lastRunAt,
     updateField,
     addField,
     removeField,
-    runGemini,
+    runExtraction,
     reset,
   }
 }

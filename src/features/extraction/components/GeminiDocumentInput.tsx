@@ -5,6 +5,9 @@ import { Card } from '@/components/ui/Card'
 import { ACCEPTED_MIME_TYPES } from '@/services/documentInput'
 
 interface GeminiDocumentInputProps {
+  title?: string
+  subtitle?: string
+  pdfOnly?: boolean
   fileName: string | null
   disabled: boolean
   error: string | null
@@ -12,6 +15,9 @@ interface GeminiDocumentInputProps {
 }
 
 export function GeminiDocumentInput({
+  title = 'Documento para Gemini',
+  subtitle = 'El backend de extracción recibe el archivo directamente; la API key nunca se expone al navegador.',
+  pdfOnly = false,
   fileName,
   disabled,
   error,
@@ -28,8 +34,8 @@ export function GeminiDocumentInput({
 
   return (
     <Card
-      title="Documento para Gemini"
-      subtitle="El backend de extracción recibe el archivo directamente; la API key nunca se expone al navegador."
+      title={title}
+      subtitle={subtitle}
       bodyClassName="p-4"
     >
       <div className="flex flex-wrap items-center gap-3">
@@ -46,7 +52,7 @@ export function GeminiDocumentInput({
           ref={inputRef}
           type="file"
           className="hidden"
-          accept={ACCEPTED_MIME_TYPES.join(',')}
+          accept={pdfOnly ? 'application/pdf,.pdf' : ACCEPTED_MIME_TYPES.join(',')}
           disabled={disabled}
           onChange={handleChange}
         />
@@ -67,7 +73,7 @@ export function GeminiDocumentInput({
           </span>
         ) : (
           <span className="text-xs text-slate-400">
-            Ningún archivo seleccionado · PDF, PNG, JPG o WEBP (máx. 6 MB)
+             {pdfOnly ? 'Ningún PDF seleccionado · PDF (máx. 6 MB)' : 'Ningún archivo seleccionado · PDF, PNG, JPG o WEBP (máx. 6 MB)'}
           </span>
         )}
       </div>

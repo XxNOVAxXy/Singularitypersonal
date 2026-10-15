@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { ExtractionField, PolicyType } from '../../shared/types.ts'
 import {
   createFieldFromDefinition,
@@ -19,8 +20,9 @@ import type { GeminiGateway } from './geminiClient.ts'
 import { buildExtractionPrompt } from './extractionPrompt.ts'
 import { parseModelOutput } from '../validation/modelOutput.ts'
 
-const EXTRACTION_TIMEOUT_MS = 45_000
+const EXTRACTION_TIMEOUT_MS = 120_000
 const EXTRACTION_MAX_TOKENS = 4096
+const inFlightExtractions = new Map<string, Promise<ExtractionSuccessResponse>>()
 
 function targetDefinitions(policyType: PolicyType) {
   return [
@@ -34,7 +36,17 @@ function targetDefinitions(policyType: PolicyType) {
  * Orquesta la extracción: construye el prompt/schema, llama a Gemini y
  * normaliza la salida con las mismas reglas que usa el frontend.
  */
-export async function runExtraction(
+function extractionKey(request: ExtractionRequest): string {
+  return createHash('sha256')
+    .update(request.policyType)
+    .update('\0')
+    .update(request.document.mimeType)
+    .update('\0')
+    .update(request.document.dataBase64)
+    .digest('hex')
+}
+
+async function executeExtraction(
   request: ExtractionRequest,
   gateway: GeminiGateway,
 ): Promise<ExtractionSuccessResponse> {
@@ -97,4 +109,24 @@ export async function runExtraction(
   }
 
   return { ok: true, method: 'gemini', fields, summary, meta }
+}
+
+/** Comparte una extracción activa para evitar dos llamadas Gemini idénticas. */
+export async function runExtraction(
+  request: ExtractionRequest,
+  gateway: GeminiGateway,
+): Promise<ExtractionSuccessResponse> {
+  const key = extractionKey(request)
+  const existing = inFlightExtractions.get(key)
+  if (existing) return existing
+
+  const pending = executeExtraction(request, gateway)
+  inFlightExtractions.set(key, pending)
+  try {
+    return await pending
+  } finally {
+    if (inFlightExtractions.get(key) === pending) {
+      inFlightExtractions.delete(key)
+    }
+  }
 }

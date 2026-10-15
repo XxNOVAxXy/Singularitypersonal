@@ -2,7 +2,6 @@ import { NavLink } from 'react-router-dom'
 import {
   FileSearch,
   GitCompare,
-  LayoutDashboard,
   Mail,
   Settings,
   ShieldCheck,
@@ -13,12 +12,11 @@ import { cn } from '@/lib/cn'
 interface NavItem {
   to: string
   label: string
-  icon: typeof LayoutDashboard
+  icon: typeof Mail
   end?: boolean
 }
 
 const navItems: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/correos', label: 'Correos', icon: Mail },
   { to: '/extraccion', label: 'Extracción de pólizas', icon: FileSearch },
   { to: '/comparacion', label: 'Comparación', icon: GitCompare },
@@ -92,10 +90,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         <div className="border-t border-slate-800 p-4">
           <div className="rounded-lg bg-slate-800/70 p-3">
             <p className="text-xs font-medium text-slate-200">
-              Entorno de demostración
+              Entorno integrado
             </p>
             <p className="mt-1 text-[11px] text-slate-400">
-              Datos simulados · Sin backend
+              Gmail y Gemini disponibles
             </p>
           </div>
         </div>

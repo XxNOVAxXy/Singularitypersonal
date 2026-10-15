@@ -139,3 +139,25 @@ test('usa la misma cantidad de campos para otro tipo de póliza', async () => {
   // 8 generales + 2 específicos de recibo + 3 adicionales
   assert.equal(result.fields.length, 13)
 })
+
+test('comparte solicitudes Gemini idénticas mientras están en vuelo', async () => {
+  let calls = 0
+  let release: ((value: string) => void) | undefined
+  const response = new Promise<string>((resolve) => {
+    release = resolve
+  })
+  const gateway: GeminiGateway = {
+    async generateJson() {
+      calls += 1
+      return response
+    },
+  }
+
+  const first = runExtraction(autoRequest(), gateway)
+  const second = runExtraction(autoRequest(), gateway)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.equal(calls, 1)
+  release?.(JSON.stringify({ fields: {} }))
+  const results = await Promise.all([first, second])
+  assert.equal(results[0].fields.length, results[1].fields.length)
+})

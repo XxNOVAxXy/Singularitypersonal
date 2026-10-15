@@ -121,6 +121,38 @@ test('POST /api/extract propaga el error del servicio de Gemini', async () => {
   })
 })
 
+test('POST /api/extract conserva Retry-After en un error 429', async () => {
+  const failingGateway: GeminiGateway = {
+    async generateJson() {
+      throw new GeminiServiceError('rate_limited', 429, 'cuota temporal', {
+        retryAfterMs: 5000,
+      })
+    },
+  }
+  await withServer(failingGateway, async (baseUrl) => {
+    const response = await postExtract(baseUrl, validPayload())
+    assert.equal(response.status, 429)
+    assert.equal(response.headers.get('retry-after'), '5')
+  })
+})
+
+test('POST /api/extract identifica una cuota diaria agotada', async () => {
+  const failingGateway: GeminiGateway = {
+    async generateJson() {
+      throw new GeminiServiceError('rate_limited', 429, 'cuota diaria', {
+        quotaExhausted: true,
+      })
+    },
+  }
+  await withServer(failingGateway, async (baseUrl) => {
+    const response = await postExtract(baseUrl, validPayload())
+    assert.equal(response.status, 429)
+    const payload = (await response.json()) as { error: string }
+    assert.equal(payload.error, 'quota_exhausted')
+    assert.equal(response.headers.has('retry-after'), false)
+  })
+})
+
 test('POST /api/extract responde 502 si la salida del modelo no es válida', async () => {
   const badGateway: GeminiGateway = {
     async generateJson() {

@@ -1,6 +1,5 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AppLayout } from '@/app/AppLayout'
-import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { EmailsPage } from '@/features/emails/EmailsPage'
 import { ExtractionPage } from '@/features/extraction/ExtractionPage'
 import { ComparisonPage } from '@/features/comparison/ComparisonPage'
@@ -11,7 +10,7 @@ const router = createBrowserRouter([
     path: '/',
     element: <AppLayout />,
     children: [
-      { index: true, element: <DashboardPage /> },
+      { index: true, element: <Navigate to="/correos" replace /> },
       { path: 'correos', element: <EmailsPage /> },
       { path: 'extraccion', element: <ExtractionPage /> },
       { path: 'comparacion', element: <ComparisonPage /> },

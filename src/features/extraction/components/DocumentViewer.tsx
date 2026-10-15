@@ -96,7 +96,7 @@ export function DocumentViewer({ document }: DocumentViewerProps) {
   }
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
       <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-800">
@@ -109,42 +109,38 @@ export function DocumentViewer({ document }: DocumentViewerProps) {
         <PolicyTypeBadge policyType={document.policyType} />
       </header>
 
-      <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-100 p-6">
-        <SimulatedPage document={document} />
+      <div className={`flex items-center justify-center overflow-hidden bg-slate-100 ${document.previewUrl ? 'flex-none p-2' : 'min-h-[620px] flex-1 p-4'}`}>
+        {document.previewUrl ? (
+          <iframe
+            src={document.previewUrl}
+            title={`Vista previa de ${document.name}`}
+            className="block h-[min(72vh,760px)] min-h-[440px] w-full rounded-lg border-0 bg-white shadow-md"
+          />
+        ) : (
+          <SimulatedPage document={document} />
+        )}
       </div>
 
       <footer className="flex items-center justify-between border-t border-slate-100 px-5 py-2.5">
         <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
           <Eye size={13} />
-          Vista simulada del documento
+          {document.previewUrl ? 'Documento original desde Gmail' : 'Vista de demostración'}
         </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page === 1}
-            className="rounded-md p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span
-            className={cn(
-              'min-w-16 text-center text-xs text-slate-500',
-            )}
-          >
-            Página {page} / {document.pages}
-          </span>
-          <button
-            type="button"
-            onClick={() =>
-              setPage((current) => Math.min(document.pages, current + 1))
-            }
-            disabled={page === document.pages}
-            className="rounded-md p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
+        {document.previewUrl ? (
+          <a href={document.downloadUrl ?? document.previewUrl} download={document.name} className="text-xs font-medium text-brand-600 hover:text-brand-700">
+            Descargar PDF
+          </a>
+        ) : (
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1} className="rounded-md p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40">
+              <ChevronLeft size={16} />
+            </button>
+            <span className={cn('min-w-16 text-center text-xs text-slate-500')}>Página {page} / {document.pages}</span>
+            <button type="button" onClick={() => setPage((current) => Math.min(document.pages, current + 1))} disabled={page === document.pages} className="rounded-md p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-40">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </footer>
     </div>
   )
