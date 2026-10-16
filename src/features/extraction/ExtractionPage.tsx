@@ -6,6 +6,7 @@ import { documents, getDocumentById } from '@/mocks/documents'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useExtraction } from '@/features/extraction/hooks/useExtraction'
+import { resolveSearchParamNavigation } from '@/features/extraction/utils/documentNavigation'
 import { ExtractionToolbar } from '@/features/extraction/components/ExtractionToolbar'
 import { DocumentSelector } from '@/features/extraction/components/DocumentSelector'
 import { DocumentViewer } from '@/features/extraction/components/DocumentViewer'
@@ -34,11 +35,39 @@ export function ExtractionPage() {
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
 
   useEffect(() => {
+<<<<<<< Updated upstream
     const param = searchParams.get('document')
     if (param && getDocumentById(param)) {
       setSelectedId(param)
     }
   }, [searchParams])
+=======
+    getGmailDocuments()
+      .then((records) => setStoredDocuments(records.map(toPolicyDocument)))
+      .catch(() => setStoredDocuments([]))
+  }, [])
+
+  useEffect(() => {
+    const navigation = resolveSearchParamNavigation(
+      searchParams.get('document'),
+      selectedId,
+      availableDocuments.map((document) => document.id),
+    )
+    if (!navigation) return
+    // Cambiar de documento por URL descarta el adjunto previo igual que la
+    // selección normal: pertenece al documento anterior.
+    if (navigation.clearAttachment) {
+      setAttachment(null)
+      setAttachmentError(null)
+    }
+    setSelectedId(navigation.documentId)
+    try {
+      window.sessionStorage.setItem(LAST_EXTRACTION_DOCUMENT_KEY, navigation.documentId)
+    } catch {
+      // No bloquea el cambio de documento.
+    }
+  }, [availableDocuments, searchParams, selectedId])
+>>>>>>> Stashed changes
 
   const selectedDocument = getDocumentById(selectedId) ?? documents[0] ?? null
 
@@ -57,10 +86,26 @@ export function ExtractionPage() {
     removeField,
     runGemini,
     reset,
+<<<<<<< Updated upstream
   } = useExtraction(selectedDocument, method, attachment, attachmentError)
+=======
+    save,
+    isDirty,
+    isSaving,
+  } = useExtraction(selectedDocument, method, attachment, attachmentError, pendingFields)
+>>>>>>> Stashed changes
 
-  const handleSelect = (id: string) => {
+  const handleSelect = async (id: string) => {
     // Cada documento es un origen distinto: descarta el archivo adjunto previo.
+    if (method === 'manual' && isDirty) {
+      const confirmed = window.confirm('Hay cambios sin guardar. ¿Guardar antes de continuar?')
+      if (confirmed) {
+        const ok = await save()
+        if (!ok) return
+      } else {
+        return
+      }
+    }
     setAttachment(null)
     setAttachmentError(null)
     setSelectedId(id)
@@ -102,6 +147,7 @@ export function ExtractionPage() {
         description="Selecciona un documento, elige el método y revisa los campos extraídos en una sola pantalla."
       />
 
+<<<<<<< Updated upstream
       <ExtractionToolbar
         method={method}
         onChangeMethod={setMethod}
@@ -112,6 +158,21 @@ export function ExtractionPage() {
         onRun={runGemini}
         onReset={reset}
       />
+=======
+        <ExtractionToolbar
+          method={method}
+          onChangeMethod={setMethod}
+          status={status}
+          isExtracting={isExtracting}
+          canRun={canRun}
+          lastRunAt={lastRunAt}
+          onRun={runExtraction}
+          onReset={reset}
+          onSave={save}
+          isDirty={isDirty}
+          isSaving={isSaving}
+        />
+>>>>>>> Stashed changes
 
       {method === 'gemini' ? (
         <GeminiDocumentInput

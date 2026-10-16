@@ -14,6 +14,9 @@ interface ExtractionToolbarProps {
   lastRunAt: string | null
   onRun: () => void
   onReset: () => void
+  onSave?: () => void
+  isDirty?: boolean
+  isSaving?: boolean
 }
 
 function GeminiHint({
@@ -49,6 +52,9 @@ export function ExtractionToolbar({
   lastRunAt,
   onRun,
   onReset,
+  onSave,
+  isDirty = false,
+  isSaving = false,
 }: ExtractionToolbarProps) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
@@ -68,6 +74,17 @@ export function ExtractionToolbar({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {method === 'manual' && onSave ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={isSaving ? <Loader2 size={14} className="animate-spin" /> : <FileSearch size={14} />}
+              onClick={onSave}
+              disabled={isSaving || isExtracting || !isDirty}
+            >
+              {isSaving ? 'Guardando' : 'Guardar'}
+            </Button>
+          ) : null}
           <Button
             variant="secondary"
             size="sm"
