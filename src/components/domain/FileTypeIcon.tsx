@@ -12,6 +12,7 @@ const fileTypeStyles: Record<DocumentFileType, string> = {
   pdf: 'bg-rose-50 text-rose-600',
   image: 'bg-sky-50 text-sky-600',
   xlsx: 'bg-emerald-50 text-emerald-600',
+  file: 'bg-slate-100 text-slate-600',
 }
 
 export function FileTypeIcon({

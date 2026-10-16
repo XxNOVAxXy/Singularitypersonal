@@ -49,9 +49,13 @@ export class GeminiServiceError extends Error {
 
 let client: GoogleGenAI | null = null
 
+export function resetGeminiClient(): void {
+  client = null
+}
+
 /**
  * Inicializa (una sola vez) el cliente oficial de Gemini.
- * La API key se lee del entorno del backend y nunca se expone.
+ * La API key se obtiene en el backend y nunca se expone al navegador.
  */
 function getClient(): GoogleGenAI {
   if (!client) {

@@ -217,7 +217,7 @@ def extract_document(
     warnings: list[str] = []
     pages, page_count = _extract_pages(filename, content, mime_type, warnings)
 
-    if method == "gemini" and settings.google_gemini_api_key:
+    if method == "gemini" and settings.get_gemini_api_key():
         try:
             result = _extract_with_gemini(filename, content, mime_type, pages, page_count)
             result["fields"] = _fields_for_policy(result["fields"], policy_type)
@@ -256,7 +256,7 @@ def _extract_with_gemini(
     prompt = f"""Analiza este documento de seguros o formulario. Devuelve exclusivamente JSON válido con esta forma:
 {{"policy_type": string|null, "fields": {{{keys}}}, "additional_fields": [{{"key": string, "label": string, "value": string}}]}}
 Extrae solo información explícita. Usa null cuando un campo no aparezca. Conserva fechas, monedas, identificadores y nombres tal como aparecen."""
-    client = genai.Client(api_key=settings.google_gemini_api_key)
+    client = genai.Client(api_key=settings.get_gemini_api_key())
     last_error: Exception | None = None
     for model in settings.gemini_models:
         for attempt in range(2):

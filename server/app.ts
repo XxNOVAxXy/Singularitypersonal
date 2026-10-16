@@ -4,6 +4,7 @@ import { geminiGateway } from './services/geminiClient.ts'
 import type { GeminiGateway } from './services/geminiClient.ts'
 import { healthRouter } from './routes/health.ts'
 import { createExtractionRouter } from './routes/extraction.ts'
+import { settingsRouter } from './routes/settings.ts'
 
 export interface AppDependencies {
   geminiGateway: GeminiGateway
@@ -28,6 +29,7 @@ export function createApp(
   app.use(express.json({ limit: '10mb' }))
 
   app.use('/api', healthRouter)
+  app.use('/api', settingsRouter)
   app.use('/api', createExtractionRouter(dependencies.geminiGateway))
 
   app.use((_req: Request, res: Response) => {

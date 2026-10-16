@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Mail, RefreshCw, Search } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import type { EmailAttachment, EmailMessage } from '@/types'
@@ -13,37 +13,69 @@ import {
   getGmailMessages,
   getGmailStatus,
   GmailServiceError,
-  startGmailAuth,
 } from '@/services/gmailService'
+import {
+  getImapAccounts,
+  getImapMessage,
+  getImapMessages,
+  ImapServiceError,
+  type ImapAccount,
+} from '@/services/imapService'
 import './emailInbox.css'
 
 type EmailFilter = 'all' | 'pdf' | 'no-attachments' | 'pending' | 'processed'
-type Mailbox = 'inbox' | 'sent'
+type GmailMailbox = 'inbox' | 'sent'
 type ExtractionStatus = NonNullable<EmailAttachment['extractionStatus']>
 
 export function EmailsPage() {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<EmailMessage[]>([])
-  const [mailbox, setMailbox] = useState<Mailbox>('inbox')
+  const [gmailMailbox, setGmailMailbox] = useState<GmailMailbox>('inbox')
+  const [imapFolder, setImapFolder] = useState('INBOX')
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
+  const [imapAccounts, setImapAccounts] = useState<ImapAccount[]>([])
+  const [gmailConnected, setGmailConnected] = useState(false)
+  const [connectedEmail, setConnectedEmail] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<EmailFilter>('all')
-  const [connected, setConnected] = useState(false)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [extractingId, setExtractingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const requestVersion = useRef(0)
 
-  const loadMessages = async (nextMailbox: Mailbox = mailbox) => {
+  const activeImapAccount = imapAccounts.find((account) => account.id === selectedAccountId) ?? null
+  const hasAccounts = gmailConnected || imapAccounts.length > 0
+  const activeFolder = selectedAccountId === 'gmail' ? gmailMailbox : imapFolder
+  const activeAccountLabel = selectedAccountId === 'gmail'
+    ? connectedEmail ?? 'Gmail'
+    : activeImapAccount?.email ?? activeImapAccount?.label ?? 'Correo empresarial'
+
+  const loadMessages = async (accountId = selectedAccountId, folder = activeFolder) => {
+    if (!accountId) return
+    const version = ++requestVersion.current
     setSyncing(true)
     setError(null)
     try {
-      const nextMessages = await getGmailMessages(nextMailbox)
+      const nextMessages = accountId === 'gmail'
+        ? await getGmailMessages(folder as GmailMailbox)
+        : (await getImapMessages(accountId, folder)).messages
+      if (version !== requestVersion.current) return
       setMessages(nextMessages)
-      setSelectedId((current) => current && nextMessages.some((message) => message.id === current) ? current : nextMessages[0]?.id ?? null)
+      setSelectedId((current) => current && nextMessages.some((message) => message.id === current)
+        ? current
+        : nextMessages[0]?.id ?? null)
     } catch (reason) {
-      setError(reason instanceof GmailServiceError ? reason.message : 'No fue posible cargar los correos.')
+      if (version !== requestVersion.current) return
+      setError(
+        reason instanceof GmailServiceError || reason instanceof ImapServiceError
+          ? reason.message
+          : 'No fue posible cargar los correos.',
+      )
+      setMessages([])
+      setSelectedId(null)
     } finally {
       setSyncing(false)
       setLoading(false)
@@ -52,20 +84,30 @@ export function EmailsPage() {
 
   useEffect(() => {
     let cancelled = false
-    getGmailStatus().then((status) => {
+    const loadAccounts = async () => {
+      const [gmailResult, imapResult] = await Promise.allSettled([getGmailStatus(), getImapAccounts()])
       if (cancelled) return
-      setConnected(status.connected)
-      if (status.connected) void loadMessages(mailbox)
-      else setLoading(false)
-    }).catch(() => {
-      if (!cancelled) {
-        setConnected(false)
-        setLoading(false)
-        setError('No se pudo conectar con el backend de Gmail.')
+      const gmail = gmailResult.status === 'fulfilled' ? gmailResult.value : null
+      const imap = imapResult.status === 'fulfilled' ? imapResult.value.accounts : []
+      setGmailConnected(Boolean(gmail?.connected))
+      setConnectedEmail(gmail?.email ?? null)
+      setImapAccounts(imap)
+      setSelectedAccountId((current) => current ?? (gmail?.connected ? 'gmail' : imap[0]?.id ?? null))
+      if (!gmail?.connected && imapResult.status === 'rejected' && gmailResult.status === 'rejected') {
+        setError('No se pudo conectar con los servicios de correo.')
       }
-    })
+      if (imap[0] && !gmail?.connected) {
+        setImapFolder(imap[0].folders[0] ?? 'INBOX')
+      }
+      if (!gmail?.connected && !imap.length) setLoading(false)
+    }
+    void loadAccounts()
     return () => { cancelled = true }
-  }, [mailbox])
+  }, [])
+
+  useEffect(() => {
+    if (selectedAccountId) void loadMessages(selectedAccountId, selectedAccountId === 'gmail' ? gmailMailbox : imapFolder)
+  }, [selectedAccountId, gmailMailbox, imapFolder])
 
   const selectedEmail = messages.find((message) => message.id === selectedId) ?? null
   const visibleMessages = useMemo(() => {
@@ -82,13 +124,19 @@ export function EmailsPage() {
 
   const selectEmail = async (message: EmailMessage) => {
     setSelectedId(message.id)
-    if (message.source !== 'gmail') return
+    if (message.source !== 'gmail' && message.source !== 'imap') return
     setDetailLoading(true)
     try {
-      const detail = await getGmailMessage(message.id)
+      const detail = message.source === 'gmail'
+        ? await getGmailMessage(message.id)
+        : await getImapMessage(message.accountId ?? selectedAccountId ?? '', message.id)
       setMessages((current) => current.map((item) => item.id === detail.id ? detail : item))
     } catch (reason) {
-      setError(reason instanceof GmailServiceError ? reason.message : 'No fue posible cargar el contenido completo.')
+      setError(
+        reason instanceof GmailServiceError || reason instanceof ImapServiceError
+          ? reason.message
+          : 'No fue posible cargar el contenido completo.',
+      )
     } finally {
       setDetailLoading(false)
     }
@@ -115,10 +163,15 @@ export function EmailsPage() {
     }
   }
 
-  const changeMailbox = (nextMailbox: Mailbox) => {
-    if (nextMailbox === mailbox) return
-    setMailbox(nextMailbox)
+  const selectAccount = (accountId: string) => {
+    setSelectedAccountId(accountId)
     setSelectedId(null)
+    if (accountId === 'gmail') {
+      setGmailMailbox('inbox')
+    } else {
+      const account = imapAccounts.find((item) => item.id === accountId)
+      setImapFolder(account?.folders[0] ?? 'INBOX')
+    }
   }
 
   return (
@@ -126,81 +179,79 @@ export function EmailsPage() {
       <PageHeader title="Correos y documentos" description="Consulta tus mensajes y decide qué documentos enviar a extracción." />
 
       <div className="inbox-intro-actions">
-        {connected ? (
-          <Button variant="secondary" size="sm" icon={<RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />} disabled={syncing} onClick={() => void loadMessages()}>
-            {syncing ? 'Sincronizando...' : 'Sincronizar nuevos'}
-          </Button>
+        {hasAccounts && selectedAccountId ? (
+          <>
+            <span className="text-xs text-slate-500">Cuenta: {activeAccountLabel}</span>
+            <Button variant="secondary" size="sm" icon={<RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />} disabled={syncing} onClick={() => void loadMessages()}>
+              {syncing ? 'Sincronizando...' : 'Actualizar'}
+            </Button>
+          </>
         ) : (
-          <Button size="sm" icon={<Mail size={14} />} onClick={startGmailAuth}>Conectar Gmail</Button>
+          <span className="text-xs text-slate-500">Conecta una cuenta desde Configuración.</span>
         )}
       </div>
 
-      {!connected ? (
+      {!hasAccounts ? (
         <div className="integration-banner">
           <Mail size={17} />
-          <span>Conecta Gmail para cargar tus mensajes reales.</span>
-          <Button variant="ghost" size="sm" onClick={startGmailAuth}>Autorizar cuenta</Button>
+          <span>Conecta Gmail o una cuenta empresarial para cargar mensajes reales.</span>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/configuracion')}>Ir a configuración</Button>
         </div>
       ) : null}
       {error ? (
         <div className="integration-banner integration-banner--error">
           <span>{error}</span>
-          <Button variant="ghost" size="sm" onClick={() => void loadMessages()}>Reintentar</Button>
+          {selectedAccountId ? <Button variant="ghost" size="sm" onClick={() => void loadMessages()}>Reintentar</Button> : null}
         </div>
       ) : null}
 
-      {!connected ? (
+      {!hasAccounts ? (
         <section className="gmail-connection-empty">
           <Mail size={34} />
-          <h2>Gmail no está conectado</h2>
-          <p>No se muestran datos de demostración. Autoriza tu cuenta para cargar tus correos reales.</p>
-          <Button icon={<Mail size={15} />} onClick={startGmailAuth}>Conectar Gmail</Button>
+          <h2>No hay cuentas de correo conectadas</h2>
+          <p>Conecta Gmail o agrega una cuenta empresarial IMAP para cargar sus mensajes reales.</p>
+          <Button icon={<Mail size={15} />} onClick={() => navigate('/configuracion')}>Ir a configuración</Button>
         </section>
       ) : null}
 
-      {connected ? <>
-      <div className="inbox-tabs" role="tablist" aria-label="Bandejas">
-        <button type="button" className={mailbox === 'inbox' ? 'inbox-tab inbox-tab--active' : 'inbox-tab'} onClick={() => changeMailbox('inbox')}>
-          <Mail size={16} />Recibidos{mailbox === 'inbox' ? <span>{messages.length}</span> : null}
-        </button>
-        <button type="button" className={mailbox === 'sent' ? 'inbox-tab inbox-tab--active' : 'inbox-tab'} onClick={() => changeMailbox('sent')}>
-          <span aria-hidden="true">↗</span>Enviados{mailbox === 'sent' ? <span>{messages.length}</span> : null}
-        </button>
-      </div>
+      {hasAccounts && selectedAccountId ? <>
+        <div className="inbox-source-selector">
+          <label className="filter-select">
+            <span>Cuenta</span>
+            <select value={selectedAccountId} onChange={(event) => selectAccount(event.target.value)}>
+              {gmailConnected ? <option value="gmail">Gmail{connectedEmail ? ` · ${connectedEmail}` : ''}</option> : null}
+              {imapAccounts.map((account) => <option key={account.id} value={account.id}>{account.label} · {account.email}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="inbox-tabs" role="tablist" aria-label="Bandejas">
+          {selectedAccountId === 'gmail' ? (
+            <>
+              <button type="button" className={gmailMailbox === 'inbox' ? 'inbox-tab inbox-tab--active' : 'inbox-tab'} onClick={() => { setGmailMailbox('inbox'); setSelectedId(null) }}><Mail size={16} />Recibidos{gmailMailbox === 'inbox' ? <span>{messages.length}</span> : null}</button>
+              <button type="button" className={gmailMailbox === 'sent' ? 'inbox-tab inbox-tab--active' : 'inbox-tab'} onClick={() => { setGmailMailbox('sent'); setSelectedId(null) }}><span aria-hidden="true">↗</span>Enviados{gmailMailbox === 'sent' ? <span>{messages.length}</span> : null}</button>
+            </>
+          ) : (activeImapAccount?.folders ?? ['INBOX']).map((folder) => (
+            <button key={folder} type="button" className={imapFolder === folder ? 'inbox-tab inbox-tab--active' : 'inbox-tab'} onClick={() => { setImapFolder(folder); setSelectedId(null) }}><Mail size={16} />{folder}{imapFolder === folder ? <span>{messages.length}</span> : null}</button>
+          ))}
+        </div>
 
-      <div className="inbox-layout">
-        <section className="inbox-panel">
-          <div className="inbox-toolbar">
-            <div className="inbox-toolbar-heading">
-              <strong>{mailbox === 'inbox' ? 'Todos los recibidos' : 'Mensajes enviados'}</strong>
-              <span>{loading ? 'Cargando...' : `${visibleMessages.length} visibles`}</span>
+        <div className="inbox-layout">
+          <section className="inbox-panel">
+            <div className="inbox-toolbar">
+              <div className="inbox-toolbar-heading">
+                <strong>{selectedAccountId === 'gmail' ? (gmailMailbox === 'inbox' ? 'Todos los recibidos' : 'Mensajes enviados') : `Mensajes de ${imapFolder}`}</strong>
+                <span>{loading ? 'Cargando...' : `${visibleMessages.length} visibles`}</span>
+              </div>
+              <div className="inbox-controls">
+                <label className="inbox-search"><Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar correo..." type="search" /></label>
+                <label className="filter-select"><span>Filtro</span><select value={filter} onChange={(event) => setFilter(event.target.value as EmailFilter)}><option value="all">Todos</option><option value="pdf">Con PDF</option><option value="no-attachments">Sin adjuntos</option><option value="pending">Pendientes</option><option value="processed">Extraídos</option></select></label>
+              </div>
             </div>
-            <div className="inbox-controls">
-              <label className="inbox-search">
-                <Search size={14} />
-                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar correo..." type="search" />
-              </label>
-              <label className="filter-select">
-                <span>Filtro</span>
-                <select value={filter} onChange={(event) => setFilter(event.target.value as EmailFilter)}>
-                  <option value="all">Todos</option>
-                  <option value="pdf">Con PDF</option>
-                  <option value="no-attachments">Sin adjuntos</option>
-                  <option value="pending">Pendientes</option>
-                  <option value="processed">Extraídos</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <EmailTable emails={visibleMessages} selectedId={selectedId} onSelect={(email) => void selectEmail(email)} />
-        </section>
+            <EmailTable emails={visibleMessages} selectedId={selectedId} onSelect={(email) => void selectEmail(email)} />
+          </section>
 
-        {selectedEmail ? (
-          <EmailDetail email={selectedEmail} loading={detailLoading} onExtract={handleExtract} extractingId={extractingId} onClose={() => setSelectedId(null)} />
-        ) : (
-          <section className="reader-empty"><EmptyState icon={<Mail size={28} />} title="Selecciona un correo" description="Elige un mensaje de la lista para ver su contenido y adjuntos." /></section>
-        )}
-      </div>
+          {selectedEmail ? <EmailDetail email={selectedEmail} loading={detailLoading} onExtract={selectedEmail.source === 'gmail' ? handleExtract : undefined} extractingId={extractingId} onClose={() => setSelectedId(null)} /> : <section className="reader-empty"><EmptyState icon={<Mail size={28} />} title="Selecciona un correo" description="Elige un mensaje de la lista para ver su contenido y adjuntos." /></section>}
+        </div>
       </> : null}
     </div>
   )

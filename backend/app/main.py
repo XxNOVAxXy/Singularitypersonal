@@ -7,23 +7,86 @@ import secrets
 from typing import Literal
 from urllib.parse import quote, unquote
 
-from fastapi import FastAPI, HTTPException, Query, UploadFile, File
+from fastapi import Body, FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 
 from .config import settings
 from .extraction import extract_document
 from .gmail import GmailClient, generate_pkce_pair
+from .imap_service import ImapError, ImapService
+from .imap_storage import LOCAL_OWNER_ID, ImapStorage
 from .storage import GmailStorage
 
 
 app = FastAPI(title="Singularity Gmail API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=[settings.frontend_url.rstrip("/")],
-                   allow_credentials=False, allow_methods=["GET", "POST"],
+                   allow_credentials=False, allow_methods=["GET", "POST", "PATCH", "DELETE"],
                    allow_headers=["Content-Type"])
 storage = GmailStorage(settings.data_dir)
 gmail = GmailClient(storage)
+imap_storage = ImapStorage(settings.data_dir, settings.imap_credential_key)
+imap = ImapService(imap_storage)
 logger = logging.getLogger("singularity")
+
+
+def _imap_payload(payload: dict[str, object], current: dict[str, object] | None = None) -> tuple[dict[str, object], str | None]:
+    source = current or {}
+    label = str(payload.get("label", source.get("label", ""))).strip()
+    email = str(payload.get("email", source.get("email", ""))).strip()
+    username = str(payload.get("username", source.get("username", ""))).strip()
+    host = str(payload.get("host", source.get("host", ""))).strip()
+    security = str(payload.get("security", source.get("security", "ssl"))).strip().lower()
+    auth_method = str(payload.get("authMethod", source.get("authMethod", "password"))).strip().lower()
+    try:
+        port = int(payload.get("port", source.get("port", 993)))
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail="El puerto IMAP no es válido") from error
+    password_value = payload.get("password")
+    password = password_value.strip() if isinstance(password_value, str) else None
+    if not label or len(label) > 100:
+        raise HTTPException(status_code=400, detail="El nombre de la cuenta es obligatorio")
+    if not email or len(email) > 320 or "@" not in email:
+        raise HTTPException(status_code=400, detail="La dirección de correo no es válida")
+    if not username or len(username) > 320:
+        raise HTTPException(status_code=400, detail="El usuario IMAP es obligatorio")
+    if not host or len(host) > 253:
+        raise HTTPException(status_code=400, detail="El servidor IMAP es obligatorio")
+    if not 1 <= port <= 65535:
+        raise HTTPException(status_code=400, detail="El puerto IMAP no es válido")
+    if security not in {"ssl", "starttls", "none"}:
+        raise HTTPException(status_code=400, detail="La seguridad IMAP no es válida")
+    if auth_method != "password":
+        raise HTTPException(status_code=400, detail="OAuth IMAP todavía no está habilitado")
+    if current is None and not password:
+        raise HTTPException(status_code=400, detail="La contraseña es obligatoria al crear la cuenta")
+    return {
+        "label": label,
+        "email": email,
+        "username": username,
+        "host": host,
+        "port": port,
+        "security": security,
+        "authMethod": auth_method,
+    }, password
+
+
+def _imap_connection_error(error: Exception) -> HTTPException:
+    if isinstance(error, ImapError):
+        return HTTPException(status_code=502, detail=str(error))
+    return HTTPException(status_code=502, detail="No fue posible conectar con la cuenta IMAP")
+
+
+def _refresh_imap_status(account: dict[str, object]) -> dict[str, object]:
+    account_id = str(account["id"])
+    try:
+        folders = imap.test_connection(account)
+        imap_storage.save_status(account_id, "connected", folders=folders)
+    except Exception as error:
+        message = str(error) if isinstance(error, ImapError) else "No fue posible conectar con la cuenta IMAP"
+        imap_storage.save_status(account_id, "error", error=message)
+    refreshed = imap_storage.list_accounts(LOCAL_OWNER_ID)
+    return next(item for item in refreshed if item["id"] == account_id)
 
 
 @app.get("/api/health")
@@ -67,6 +130,156 @@ def gmail_status() -> dict[str, object]:
     except Exception as exc:
         raise HTTPException(status_code=502, detail="No fue posible consultar el estado de Gmail") from exc
     return {"connected": profile is not None, "email": profile.get("emailAddress") if profile else None}
+
+
+@app.get("/api/imap/accounts")
+def imap_accounts() -> dict[str, object]:
+    accounts = []
+    for account in imap_storage.list_accounts(LOCAL_OWNER_ID):
+        raw = imap_storage.get_account(str(account["id"]), LOCAL_OWNER_ID)
+        if raw is not None:
+            accounts.append(_refresh_imap_status(raw))
+    return {"accounts": accounts}
+
+
+@app.post("/api/imap/accounts/test")
+def test_imap_account(payload: dict[str, object] = Body(...)) -> dict[str, object]:
+    account_id = payload.get("accountId")
+    current = imap_storage.get_account(str(account_id), LOCAL_OWNER_ID) if isinstance(account_id, str) and account_id else None
+    values, password = _imap_payload(payload, current)
+    values["id"] = "test"
+    values["password"] = password or (current["password"] if current else "")
+    try:
+        folders = imap.test_connection(values)
+    except Exception as error:
+        raise _imap_connection_error(error) from error
+    return {"ok": True, "status": "connected", "folders": folders}
+
+
+@app.post("/api/imap/accounts")
+def create_imap_account(payload: dict[str, object] = Body(...)) -> dict[str, object]:
+    values, password = _imap_payload(payload)
+    values["id"] = "new"
+    values["password"] = password
+    try:
+        folders = imap.test_connection(values)
+        account = imap_storage.create_account(values, str(password), LOCAL_OWNER_ID)
+        imap_storage.save_status(str(account["id"]), "connected", folders=folders)
+    except Exception as error:
+        raise _imap_connection_error(error) from error
+    return {"account": next(item for item in imap_storage.list_accounts(LOCAL_OWNER_ID) if item["id"] == account["id"])}
+
+
+@app.patch("/api/imap/accounts/{account_id}")
+def update_imap_account(account_id: str, payload: dict[str, object] = Body(...)) -> dict[str, object]:
+    current = imap_storage.get_account(account_id, LOCAL_OWNER_ID)
+    if current is None:
+        raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
+    values, password = _imap_payload(payload, current)
+    values["id"] = account_id
+    values["password"] = password or current["password"]
+    try:
+        folders = imap.test_connection(values)
+        account = imap_storage.update_account(account_id, values, password, LOCAL_OWNER_ID)
+        if account is None:
+            raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
+        imap_storage.save_status(account_id, "connected", folders=folders)
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _imap_connection_error(error) from error
+    return {"account": next(item for item in imap_storage.list_accounts(LOCAL_OWNER_ID) if item["id"] == account_id)}
+
+
+@app.post("/api/imap/accounts/{account_id}/test")
+def retest_imap_account(account_id: str) -> dict[str, object]:
+    account = imap_storage.get_account(account_id, LOCAL_OWNER_ID)
+    if account is None:
+        raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
+    try:
+        folders = imap.test_connection(account)
+        imap_storage.save_status(account_id, "connected", folders=folders)
+    except Exception as error:
+        message = str(error) if isinstance(error, ImapError) else "No fue posible conectar con la cuenta IMAP"
+        imap_storage.save_status(account_id, "error", error=message)
+        raise _imap_connection_error(error) from error
+    return {"account": next(item for item in imap_storage.list_accounts(LOCAL_OWNER_ID) if item["id"] == account_id)}
+
+
+@app.delete("/api/imap/accounts/{account_id}")
+def delete_imap_account(account_id: str) -> dict[str, bool]:
+    if not imap_storage.delete_account(account_id, LOCAL_OWNER_ID):
+        raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
+    return {"ok": True}
+
+
+@app.get("/api/imap/accounts/{account_id}/folders")
+def imap_account_folders(account_id: str) -> dict[str, object]:
+    account = imap_storage.get_account(account_id, LOCAL_OWNER_ID)
+    if account is None:
+        raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
+    try:
+        folders = imap.test_connection(account)
+        imap_storage.save_status(account_id, "connected", folders=folders)
+    except Exception as error:
+        raise _imap_connection_error(error) from error
+    return {"folders": folders}
+
+
+@app.get("/api/imap/messages")
+def imap_messages(
+    account_id: str = Query(..., min_length=1, max_length=100),
+    folder: str = Query("INBOX", min_length=1, max_length=200),
+    limit: int = Query(50, ge=1, le=50),
+) -> dict[str, object]:
+    account = imap_storage.get_account(account_id, LOCAL_OWNER_ID)
+    if account is None:
+        raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
+    try:
+        messages = imap.list_messages(account, folder, limit)
+    except Exception as error:
+        raise _imap_connection_error(error) from error
+    return {"messages": messages, "accountId": account_id, "folder": folder, "count": len(messages)}
+
+
+@app.get("/api/imap/messages/{message_id}")
+def imap_message(message_id: str, account_id: str = Query(..., min_length=1, max_length=100)) -> dict[str, object]:
+    account = imap_storage.get_account(account_id, LOCAL_OWNER_ID)
+    if account is None:
+        raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
+    try:
+        return imap.get_message(account, unquote(message_id).strip())
+    except Exception as error:
+        raise _imap_connection_error(error) from error
+
+
+@app.get("/api/imap/attachments/{message_id}/{attachment_id}")
+def imap_attachment(
+    message_id: str,
+    attachment_id: str,
+    account_id: str = Query(..., min_length=1, max_length=100),
+    download: bool = Query(False),
+) -> Response:
+    account = imap_storage.get_account(account_id, LOCAL_OWNER_ID)
+    if account is None:
+        raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
+    try:
+        content, filename, mime_type = imap.download_attachment(
+            account,
+            unquote(message_id).strip(),
+            unquote(attachment_id).strip(),
+        )
+        safe_name = quote(filename.replace("\r", "").replace("\n", ""), safe="")
+        previewable = mime_type == "application/pdf" or mime_type.startswith("image/")
+        disposition = "attachment" if download or not previewable else "inline"
+        return Response(
+            content=content,
+            media_type=mime_type,
+            headers={"Cache-Control": "private, max-age=300",
+                     "Content-Disposition": f'{disposition}; filename="{safe_name}"'},
+        )
+    except Exception as error:
+        raise _imap_connection_error(error) from error
 
 
 @app.get("/api/gmail/messages")
