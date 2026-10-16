@@ -4,7 +4,7 @@ export type PolicyType = 'auto' | 'gmm' | 'vida' | 'fianza' | 'danos' | 'recibo'
 
 export type DocumentStatus = 'pending' | 'in_review' | 'reviewed'
 
-export type DocumentFileType = 'pdf' | 'image' | 'xlsx'
+export type DocumentFileType = 'pdf' | 'image' | 'xlsx' | 'file'
 
 export type FieldKind =
   | 'text'
@@ -33,7 +33,7 @@ export interface PolicyDocument {
   receivedAt: string
   status: DocumentStatus
   emailId?: string
-  source?: 'demo' | 'gmail'
+  source?: 'demo' | 'gmail' | 'imap'
   previewUrl?: string
   downloadUrl?: string
   extractionFields?: ExtractionField[]
@@ -91,8 +91,10 @@ export interface EmailMessage {
   receivedAt: string
   read: boolean
   attachments: EmailAttachment[]
-  source?: 'demo' | 'gmail'
-  mailbox?: 'inbox' | 'sent'
+  source?: 'demo' | 'gmail' | 'imap'
+  mailbox?: string
+  accountId?: string
+  accountName?: string
   bodyHtml?: string | null
   threadId?: string
   labels?: string[]

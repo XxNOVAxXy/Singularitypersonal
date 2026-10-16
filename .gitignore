@@ -33,3 +33,6 @@ dist-ssr
 __pycache__/
 *.py[cod]
 backend/data/
+
+# Configuración local guardada desde la web
+server/data/

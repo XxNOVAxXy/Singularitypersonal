@@ -12,13 +12,15 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { GeneralFieldsSettings } from '@/features/settings/components/GeneralFieldsSettings'
 import { PolicyTypeFieldsSettings } from '@/features/settings/components/PolicyTypeFieldsSettings'
 import { AdditionalFieldsSettings } from '@/features/settings/components/AdditionalFieldsSettings'
+import { GmailApiKeySettings } from '@/features/settings/components/gmail_APIkey'
 
-type SettingsTab = 'general' | 'policy' | 'additional'
+type SettingsTab = 'general' | 'policy' | 'additional' | 'api'
 
 const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'general', label: 'Campos generales' },
   { id: 'policy', label: 'Por tipo de póliza' },
   { id: 'additional', label: 'Campos adicionales' },
+  { id: 'api', label: 'Integraciones' },
 ]
 
 interface NewFieldInput {
@@ -135,6 +137,8 @@ export function SettingsPage() {
           }
         />
       ) : null}
+
+      {activeTab === 'api' ? <GmailApiKeySettings /> : null}
     </div>
   )
 }

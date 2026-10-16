@@ -28,6 +28,10 @@ export default defineConfig(({ mode }) => {
           target: 'http://127.0.0.1:8000',
           changeOrigin: false,
         },
+        '/api/imap': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: false,
+        },
         '/api/extractions': {
           target: 'http://127.0.0.1:8000',
           changeOrigin: false,

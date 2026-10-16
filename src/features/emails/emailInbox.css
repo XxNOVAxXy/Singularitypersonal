@@ -16,6 +16,16 @@
   margin-bottom: 25px;
 }
 
+.email-inbox-page .inbox-source-selector {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 14px;
+}
+
+.email-inbox-page .inbox-source-selector .filter-select select {
+  min-width: 230px;
+}
+
 .email-inbox-page .integration-banner {
   display: flex;
   align-items: center;
@@ -230,6 +240,7 @@
 
 @media (max-width: 900px) {
   .email-inbox-page .inbox-intro-actions { margin-top: 15px; margin-bottom: 18px; justify-content: flex-start; }
+  .email-inbox-page .inbox-source-selector { justify-content: flex-start; margin-top: 0; }
   .email-inbox-page .inbox-layout { display: block; }
   .email-inbox-page .email-reader { margin-top: 16px; }
   .email-inbox-page .reader-article { padding: 28px 30px 34px; }

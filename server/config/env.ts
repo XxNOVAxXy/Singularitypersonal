@@ -1,4 +1,6 @@
 import dotenv from 'dotenv'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 dotenv.config({ quiet: true })
 
@@ -17,6 +19,9 @@ export interface ServerEnv {
 const DEFAULT_PORT = 8787
 const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_MODEL = 'gemini-3.8-flash'
+const GEMINI_SETTINGS_FILE = fileURLToPath(
+  new URL('../data/gemini-settings.json', import.meta.url),
+)
 
 export class ConfigurationError extends Error {
   readonly code = 'configuration_error'
@@ -70,16 +75,57 @@ function readEnv(): ServerEnv {
 
 export const env: ServerEnv = readEnv()
 
+interface StoredGeminiSettings {
+  apiKey?: unknown
+}
+
+function readStoredGeminiApiKey(): string | undefined {
+  try {
+    const settings = JSON.parse(
+      readFileSync(GEMINI_SETTINGS_FILE, 'utf8'),
+    ) as StoredGeminiSettings
+    return typeof settings.apiKey === 'string' && settings.apiKey.trim()
+      ? settings.apiKey.trim()
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function persistGeminiApiKey(apiKey: string): void {
+  mkdirSync(fileURLToPath(new URL('../data/', import.meta.url)), {
+    recursive: true,
+  })
+  writeFileSync(
+    GEMINI_SETTINGS_FILE,
+    JSON.stringify({ apiKey }, null, 2),
+    { encoding: 'utf8', mode: 0o600 },
+  )
+}
+
+// La configuración web tiene prioridad; el .env queda como respaldo inicial.
+let runtimeGeminiApiKey = readStoredGeminiApiKey() ?? env.geminiApiKey
+
+export function setGeminiApiKey(apiKey: string): void {
+  const normalized = apiKey.trim()
+  if (!normalized) return
+  persistGeminiApiKey(normalized)
+  runtimeGeminiApiKey = normalized
+}
+
+export function isGeminiApiKeyConfigured(): boolean {
+  return Boolean(runtimeGeminiApiKey)
+}
+
 /**
  * Devuelve la API key de Gemini o lanza un error de configuración claro.
  * Nunca revela el valor de la clave.
  */
 export function requireGeminiApiKey(): string {
-  if (!env.geminiApiKey) {
+  if (!runtimeGeminiApiKey) {
     throw new ConfigurationError(
-      'Falta GEMINI_API_KEY. Defínela en el archivo .env del backend ' +
-        '(copia .env.example a .env y completa el valor).',
+      'Falta la API key de Gemini. Configúrala desde Configuración > Integraciones.',
     )
   }
-  return env.geminiApiKey
+  return runtimeGeminiApiKey
 }

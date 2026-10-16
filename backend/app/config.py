@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 from urllib.parse import urlparse
@@ -26,11 +27,30 @@ class Settings:
     )
     ocr_language: str = os.getenv("OCR_LANGUAGE", "spa+eng")
     frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    imap_timeout_seconds: int = int(os.getenv("IMAP_TIMEOUT_SECONDS", "15"))
+    imap_allow_insecure_local: bool = os.getenv("IMAP_ALLOW_INSECURE_LOCAL", "false").lower() == "true"
+    imap_credential_key: str | None = os.getenv("IMAP_CREDENTIAL_KEY") or None
+    imap_allowed_hosts: tuple[str, ...] = tuple(
+        host.strip().lower()
+        for host in os.getenv("IMAP_ALLOWED_HOSTS", "").split(",")
+        if host.strip()
+    )
     data_dir: Path = ROOT_DIR / "backend" / "data"
 
     @property
     def gemini_models(self) -> tuple[str, ...]:
         return tuple(dict.fromkeys((self.google_gemini_model, *self.google_gemini_fallback_models)))
+
+    def get_gemini_api_key(self) -> str:
+        persisted_file = ROOT_DIR / "server" / "data" / "gemini-settings.json"
+        try:
+            with persisted_file.open("r", encoding="utf-8") as file:
+                value = json.load(file).get("apiKey")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        except (OSError, ValueError, AttributeError):
+            pass
+        return self.google_gemini_api_key
 
     def require_google_oauth(self) -> None:
         missing = [

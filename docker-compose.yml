@@ -1,0 +1,17 @@
+services:
+  greenmail:
+    image: greenmail/standalone:2.1.3
+    container_name: singularity-greenmail
+    environment:
+      GREENMAIL_OPTS: >-
+        -Dgreenmail.setup.test.all
+        -Dgreenmail.users=ventas:ventas123@empresa.test,administracion:admin123@empresa.test
+    ports:
+      - "127.0.0.1:3025:3025"
+      - "127.0.0.1:3143:3143"
+      - "127.0.0.1:3993:3993"
+    volumes:
+      - greenmail-data:/home/greenmail/greenmail
+
+volumes:
+  greenmail-data:
