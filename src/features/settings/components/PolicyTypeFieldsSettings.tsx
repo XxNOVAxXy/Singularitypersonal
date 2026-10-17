@@ -42,7 +42,7 @@ export function PolicyTypeFieldsSettings({
             className={cn(
               'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
               activeType === config.id
-                ? 'bg-brand-600 text-white'
+                 ? 'bg-carbon text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
             )}
           >

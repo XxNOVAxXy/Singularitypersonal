@@ -4,7 +4,7 @@ export type PolicyType = 'auto' | 'gmm' | 'vida' | 'fianza' | 'danos' | 'recibo'
 
 export type DocumentStatus = 'pending' | 'in_review' | 'reviewed'
 
-export type DocumentFileType = 'pdf' | 'image' | 'xlsx'
+export type DocumentFileType = 'pdf' | 'image' | 'xlsx' | 'file'
 
 export type FieldKind =
   | 'text'
@@ -33,6 +33,10 @@ export interface PolicyDocument {
   receivedAt: string
   status: DocumentStatus
   emailId?: string
+  source?: 'demo' | 'gmail' | 'imap'
+  previewUrl?: string
+  downloadUrl?: string
+  extractionFields?: ExtractionField[]
 }
 
 export interface EmailAttachment {
@@ -41,6 +45,40 @@ export interface EmailAttachment {
   fileType: DocumentFileType
   sizeKb: number
   documentId?: string
+  mimeType?: string
+  downloadUrl?: string
+  previewUrl?: string
+  extractUrl?: string
+  isPdf?: boolean
+  isImage?: boolean
+  extractionStatus?: 'pending' | 'processing' | 'extracted' | 'not-policy' | 'error'
+}
+
+export interface EmailAddress {
+  name: string
+  email: string
+}
+
+export interface InlineResource {
+  contentId: string
+  attachmentId?: string
+  attachmentKey?: string
+  mimeType: string
+  url?: string
+}
+
+export interface ThreadMessage {
+  id: string
+  fromName: string
+  fromEmail: string
+  subject: string
+  body: string
+  bodyHtml?: string | null
+  receivedAt: string
+  unread?: boolean
+  to?: EmailAddress[]
+  cc?: EmailAddress[]
+  inlineResources?: InlineResource[]
 }
 
 export interface EmailMessage {
@@ -53,6 +91,21 @@ export interface EmailMessage {
   receivedAt: string
   read: boolean
   attachments: EmailAttachment[]
+  source?: 'demo' | 'gmail' | 'imap'
+  mailbox?: string
+  accountId?: string
+  accountName?: string
+  bodyHtml?: string | null
+  threadId?: string
+  labels?: string[]
+  hasAttachments?: boolean
+  receivedLabel?: string
+  policyType?: string
+  isPolicyRelated?: boolean
+  to?: EmailAddress[]
+  cc?: EmailAddress[]
+  inlineResources?: InlineResource[]
+  thread?: ThreadMessage[]
 }
 
 export interface FieldDefinition {

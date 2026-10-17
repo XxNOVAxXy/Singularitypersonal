@@ -1,4 +1,4 @@
-import { Loader2, RotateCcw, Sparkles } from 'lucide-react'
+import { FileSearch, Loader2, RotateCcw, Sparkles } from 'lucide-react'
 import type { ExtractionMethod } from '@/types'
 import type { ExtractionStatus } from '@/features/extraction/utils/extractionState'
 import { relativeTime } from '@/lib/format'
@@ -28,7 +28,7 @@ function GeminiHint({
 }) {
   if (status === 'extracting') {
     return (
-      <span className="inline-flex items-center gap-1.5 text-brand-600">
+       <span className="inline-flex items-center gap-1.5 text-graphite">
         <Loader2 size={14} className="animate-spin" />
         Procesando documento…
       </span>
@@ -57,22 +57,19 @@ export function ExtractionToolbar({
   isSaving = false,
 }: ExtractionToolbarProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <div className="flex h-full flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(28,30,34,0.04)]">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
           Método de extracción
         </span>
-        <MethodSelector method={method} onChange={onChangeMethod} />
-      </div>
-
-      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
-        <div className="text-xs text-slate-500">
+        <div className="text-right text-[11px] text-slate-500">
           {method === 'gemini' ? (
             <GeminiHint status={status} lastRunAt={lastRunAt} />
           ) : (
-            <span>Captura los valores manualmente en cada campo</span>
+            <span>Reglas locales</span>
           )}
         </div>
+<<<<<<< HEAD
         <div className="flex items-center gap-2">
           {method === 'manual' && onSave ? (
             <Button
@@ -85,6 +82,13 @@ export function ExtractionToolbar({
               {isSaving ? 'Guardando' : 'Guardar'}
             </Button>
           ) : null}
+=======
+      </div>
+
+      <MethodSelector method={method} onChange={onChangeMethod} />
+
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
+>>>>>>> origin/cambiossosme
           <Button
             variant="secondary"
             size="sm"
@@ -94,27 +98,30 @@ export function ExtractionToolbar({
           >
             Restablecer
           </Button>
-          {method === 'gemini' ? (
-            <Button
-              size="sm"
-              icon={
-                isExtracting ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Sparkles size={14} />
-                )
-              }
-              onClick={onRun}
-              disabled={!canRun}
-              title={
-                canRun ? undefined : 'Adjunta un documento para poder extraer'
-              }
-            >
-              {isExtracting ? 'Extrayendo…' : 'Ejecutar extracción'}
-            </Button>
-          ) : null}
+          <Button
+            size="sm"
+            icon={
+              isExtracting ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : method === 'manual' ? (
+                <FileSearch size={14} />
+              ) : (
+                <Sparkles size={14} />
+              )
+            }
+            onClick={onRun}
+            disabled={!canRun}
+            title={
+              canRun
+                ? undefined
+                : status === 'done'
+                  ? 'El documento ya fue procesado. Restablece para ejecutarlo otra vez.'
+                  : 'Adjunta un documento para poder extraer'
+            }
+          >
+            {isExtracting ? 'Extrayendo…' : method === 'manual' ? 'Leer PDF' : 'Ejecutar extracción'}
+          </Button>
         </div>
-      </div>
     </div>
   )
 }

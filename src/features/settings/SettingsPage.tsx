@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
+import { Braces, Layers3, ListChecks, PlugZap, Settings2 } from 'lucide-react'
 import type { FieldDefinition, FieldKind, PolicyType } from '@/types'
 import { createId, toFieldKey } from '@/lib/slug'
 import { cn } from '@/lib/cn'
@@ -12,13 +13,15 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { GeneralFieldsSettings } from '@/features/settings/components/GeneralFieldsSettings'
 import { PolicyTypeFieldsSettings } from '@/features/settings/components/PolicyTypeFieldsSettings'
 import { AdditionalFieldsSettings } from '@/features/settings/components/AdditionalFieldsSettings'
+import { GmailApiKeySettings } from '@/features/settings/components/gmail_APIkey'
 
-type SettingsTab = 'general' | 'policy' | 'additional'
+type SettingsTab = 'general' | 'policy' | 'additional' | 'api'
 
-const tabs: Array<{ id: SettingsTab; label: string }> = [
-  { id: 'general', label: 'Campos generales' },
-  { id: 'policy', label: 'Por tipo de póliza' },
-  { id: 'additional', label: 'Campos adicionales' },
+const tabs: Array<{ id: SettingsTab; label: string; icon: typeof Settings2 }> = [
+  { id: 'general', label: 'Campos generales', icon: ListChecks },
+  { id: 'policy', label: 'Por tipo de póliza', icon: Layers3 },
+  { id: 'additional', label: 'Campos adicionales', icon: Braces },
+  { id: 'api', label: 'Integraciones', icon: PlugZap },
 ]
 
 interface NewFieldInput {
@@ -70,6 +73,8 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={<Settings2 size={22} strokeWidth={1.8} />}
+        eyebrow="Administración"
         title="Configuración"
         description="Administra la estructura de campos utilizada por el módulo de extracción."
       />
@@ -81,12 +86,13 @@ export function SettingsPage() {
             type="button"
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              'rounded-md px-4 py-2 text-sm font-medium transition-colors',
+              'inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
               activeTab === tab.id
-                ? 'bg-brand-50 text-brand-700'
+                 ? 'bg-slate-100 text-ink ring-1 ring-slate-200'
                 : 'text-slate-500 hover:bg-slate-100',
             )}
           >
+            <tab.icon size={15} />
             {tab.label}
           </button>
         ))}
@@ -135,6 +141,8 @@ export function SettingsPage() {
           }
         />
       ) : null}
+
+      {activeTab === 'api' ? <GmailApiKeySettings /> : null}
     </div>
   )
 }

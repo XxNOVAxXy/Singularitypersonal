@@ -8,6 +8,7 @@ import {
   ExtractionServiceError,
   extractFromFile,
   extractPolicyFields,
+  mapRulesFields,
 } from '../../src/services/extractionService.ts'
 
 const successPayload: ExtractionSuccessResponse = {
@@ -182,4 +183,30 @@ test('extractFromFile lanza unsupported_media_type ante un archivo no válido', 
       error instanceof ExtractionServiceError &&
       error.code === 'unsupported_media_type',
   )
+})
+
+test('mapRulesFields conserva campos locales, páginas y opciones editables', () => {
+  const fields = mapRulesFields({
+    fields: [
+      {
+        key: 'policyNumber',
+        label: 'Número de póliza',
+        category: 'general',
+        required: true,
+        value: 'POL-1234',
+        confidence: 91,
+        source: { page: 2 },
+      },
+      {
+        key: 'currency',
+        label: 'Moneda',
+        category: 'general',
+        value: 'CAD',
+      },
+    ],
+  })
+  assert.equal(fields[0]?.source, 'manual')
+  assert.equal(fields[0]?.page, 2)
+  assert.equal(fields[1]?.kind, 'select')
+  assert.deepEqual(fields[1]?.options, ['MXN', 'USD', 'EUR', 'CAD'])
 })

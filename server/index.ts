@@ -1,15 +1,15 @@
 import { createApp } from './app.ts'
-import { env } from './config/env.ts'
+import { env, isGeminiApiKeyConfigured } from './config/env.ts'
 
 const app = createApp()
 
 const server = app.listen(env.port, env.host, () => {
   console.log(`[server] escuchando en http://${env.host}:${env.port}`)
-  if (!env.geminiApiKey) {
+  if (!isGeminiApiKeyConfigured()) {
     console.warn(
       '[server] GEMINI_API_KEY no configurada: /api/health/gemini y ' +
         '/api/extract devolverán un error de configuración hasta que se ' +
-        'defina en .env.',
+        'defina desde Configuración > Integraciones.',
     )
   }
 })

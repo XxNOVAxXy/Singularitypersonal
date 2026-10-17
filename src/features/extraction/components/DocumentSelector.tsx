@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Files, Search } from 'lucide-react'
 import type { DocumentStatus, PolicyDocument } from '@/types'
 import { cn } from '@/lib/cn'
 import { relativeTime } from '@/lib/format'
@@ -36,14 +36,19 @@ export function DocumentSelector({
   }, [documents, filter, query])
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 p-4">
-        <h3 className="text-sm font-semibold text-slate-800">
-          Documentos
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(28,30,34,0.04)]">
+      <div className="border-b border-slate-100 bg-slate-50/45 p-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-carbon text-white">
+            <Files size={15} />
+          </span>
+          <h3 className="text-sm font-semibold text-slate-800">
+            Documentos
           <span className="ml-2 text-xs font-normal text-slate-400">
             {filtered.length} de {documents.length}
           </span>
-        </h3>
+          </h3>
+        </div>
         <div className="relative mt-3">
           <Search
             size={15}
@@ -53,10 +58,10 @@ export function DocumentSelector({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Buscar documento…"
-            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:outline-none"
+            className="h-9 w-full rounded-lg border border-slate-200 bg-mist pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-graphite focus:bg-white focus:outline-none"
           />
         </div>
-        <div className="mt-3 flex gap-1">
+        <div className="mt-3 flex flex-wrap gap-1">
           {(
             [
               { value: 'all', label: 'Todos' },
@@ -71,8 +76,8 @@ export function DocumentSelector({
               onClick={() => setFilter(option.value)}
               className={cn(
                 'rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
-                filter === option.value
-                  ? 'bg-brand-50 text-brand-700'
+                 filter === option.value
+                   ? 'bg-slate-100 text-ink'
                   : 'text-slate-500 hover:bg-slate-100',
               )}
             >
@@ -98,7 +103,7 @@ export function DocumentSelector({
                   className={cn(
                     'flex w-full items-start gap-3 rounded-lg border p-2.5 text-left transition-colors',
                     active
-                      ? 'border-brand-200 bg-brand-50/70'
+                      ? 'border-slate-300 bg-slate-100/70'
                       : 'border-transparent hover:bg-slate-50',
                   )}
                 >
@@ -109,6 +114,9 @@ export function DocumentSelector({
                     </p>
                     <p className="truncate text-xs text-slate-500">
                       {document.insurer} · {document.client}
+                    </p>
+                    <p className="mt-1 text-[10px] font-medium text-graphite">
+                      {document.source === 'gmail' ? 'Resultado guardado en backend' : 'Datos de demostración'}
                     </p>
                     <div className="mt-1.5 flex items-center gap-2">
                       <DocumentStatusBadge status={document.status} />
