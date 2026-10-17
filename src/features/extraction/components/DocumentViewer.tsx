@@ -13,7 +13,7 @@ interface DocumentViewerProps {
 
 function SimulatedPage({ document }: { document: PolicyDocument }) {
   return (
-    <div className="mx-auto w-full max-w-md rounded-lg bg-white p-6 shadow-md ring-1 ring-slate-200">
+    <div className="mx-auto w-full max-w-md rounded-xl bg-white p-6 shadow-[0_8px_24px_rgba(28,30,34,0.08)] ring-1 ring-slate-200">
       <div className="flex items-start justify-between">
         <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-900 text-[10px] font-bold text-white">
           {document.insurer.slice(0, 3).toUpperCase()}
@@ -96,25 +96,32 @@ export function DocumentViewer({ document }: DocumentViewerProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-800">
-            {document.name}
-          </p>
-          <p className="text-[11px] text-slate-400">
-            {formatFileSize(document.sizeKb)} · {document.pages} pág.
-          </p>
+    <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(28,30,34,0.04)]">
+      <header className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/45 px-5 py-3.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-carbon text-white">
+            <Eye size={15} />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-800">
+              {document.name}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              {formatFileSize(document.sizeKb)} · {document.pages} pág.
+            </p>
+          </div>
         </div>
-        <PolicyTypeBadge policyType={document.policyType} />
+        <span className="shrink-0">
+          <PolicyTypeBadge policyType={document.policyType} />
+        </span>
       </header>
 
-      <div className={`flex items-center justify-center overflow-hidden bg-slate-100 ${document.previewUrl ? 'flex-none p-2' : 'min-h-[620px] flex-1 p-4'}`}>
+      <div className={`flex min-w-0 items-center justify-center overflow-hidden bg-slate-100 ${document.previewUrl ? 'flex-none p-3' : 'min-h-[620px] flex-1 p-4'}`}>
         {document.previewUrl ? (
           <iframe
             src={document.previewUrl}
             title={`Vista previa de ${document.name}`}
-            className="block h-[min(72vh,760px)] min-h-[440px] w-full rounded-lg border-0 bg-white shadow-md"
+            className="mx-auto block h-[min(72vh,760px)] min-h-[440px] w-full max-w-[900px] rounded-lg border-0 bg-white shadow-md"
           />
         ) : (
           <SimulatedPage document={document} />
@@ -127,7 +134,7 @@ export function DocumentViewer({ document }: DocumentViewerProps) {
           {document.previewUrl ? 'Documento original desde Gmail' : 'Vista de demostración'}
         </span>
         {document.previewUrl ? (
-          <a href={document.downloadUrl ?? document.previewUrl} download={document.name} className="text-xs font-medium text-brand-600 hover:text-brand-700">
+          <a href={document.downloadUrl ?? document.previewUrl} download={document.name} className="text-xs font-medium text-graphite hover:text-ink">
             Descargar PDF
           </a>
         ) : (

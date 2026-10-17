@@ -84,7 +84,7 @@ export function GmailApiKeySettings() {
         subtitle="Conecta la cuenta que utilizará el módulo de correos."
       >
         <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <Mail className="mt-0.5 shrink-0 text-brand-600" size={20} />
+          <Mail className="mt-0.5 shrink-0 text-graphite" size={20} />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-slate-800">
               {gmailLoading

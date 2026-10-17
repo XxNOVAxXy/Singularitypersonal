@@ -6,16 +6,24 @@
     sans-serif;
   --font-mono: ui-monospace, 'JetBrains Mono', Consolas, monospace;
 
-  --color-brand-50: #eef4ff;
-  --color-brand-100: #d9e6ff;
-  --color-brand-200: #bcd3ff;
-  --color-brand-300: #8eb6ff;
-  --color-brand-400: #598eff;
-  --color-brand-500: #3366ff;
-  --color-brand-600: #1f48e6;
-  --color-brand-700: #1a39b4;
-  --color-brand-800: #1b348f;
-  --color-brand-900: #1b3170;
+  --color-carbon: #1c1e22;
+  --color-graphite: #44474d;
+  --color-platinum: #a7adb4;
+  --color-mist: #f1f2f4;
+  --color-ink: #202227;
+  --color-muted: #697079;
+
+  /* Compatibility names for existing feature-level classes. */
+  --color-brand-50: #f1f2f4;
+  --color-brand-100: #e2e4e8;
+  --color-brand-200: #cbd0d5;
+  --color-brand-300: #a7adb4;
+  --color-brand-400: #697079;
+  --color-brand-500: #44474d;
+  --color-brand-600: #2f3237;
+  --color-brand-700: #202227;
+  --color-brand-800: #1c1e22;
+  --color-brand-900: #15171a;
 }
 
 html,
@@ -26,11 +34,23 @@ body,
 
 body {
   margin: 0;
-  background-color: var(--color-slate-100);
-  color: var(--color-slate-700);
+  background-color: var(--color-mist);
+  color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: var(--color-platinum);
+  color: var(--color-carbon);
 }
 
 * {

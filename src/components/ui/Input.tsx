@@ -11,10 +11,10 @@ export function Input({ className, invalid, ...props }: InputProps) {
       className={cn(
         'h-9 w-full rounded-lg border bg-white px-3 text-sm text-slate-800 transition-colors',
         'placeholder:text-slate-400',
-        'focus:outline-none focus:ring-2 focus:ring-brand-500/30',
+        'focus:outline-none focus:ring-2 focus:ring-platinum/40',
         invalid
           ? 'border-rose-300 focus:border-rose-400'
-          : 'border-slate-300 focus:border-brand-500',
+          : 'border-slate-300 focus:border-graphite',
         className,
       )}
       {...props}

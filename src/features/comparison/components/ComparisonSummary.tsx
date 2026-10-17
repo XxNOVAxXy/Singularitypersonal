@@ -29,7 +29,7 @@ export function ComparisonSummary({ summary }: ComparisonSummaryProps) {
       label: 'Solo en B',
       value: summary.onlyB,
       icon: FileWarning,
-      className: 'text-sky-600 bg-sky-50',
+       className: 'text-graphite bg-slate-100',
     },
   ]
 
