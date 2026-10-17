@@ -72,7 +72,7 @@ export function ExtractionResults({
           summary.missing > 0
             ? 'bg-amber-500'
             : summary.review > 0
-              ? 'bg-brand-500'
+              ? 'bg-graphite'
               : 'bg-emerald-500'
         }
       />

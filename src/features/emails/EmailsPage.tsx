@@ -176,7 +176,12 @@ export function EmailsPage() {
 
   return (
     <div className="email-inbox-page">
-      <PageHeader title="Correos y documentos" description="Consulta tus mensajes y decide qué documentos enviar a extracción." />
+      <PageHeader
+        icon={<Mail size={22} strokeWidth={1.8} />}
+        eyebrow="Centro documental"
+        title="Correos y documentos"
+        description="Consulta tus mensajes y decide qué documentos enviar a extracción."
+      />
 
       <div className="inbox-intro-actions">
         {hasAccounts && selectedAccountId ? (

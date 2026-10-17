@@ -34,16 +34,17 @@ export function GeminiDocumentInput({
 
   return (
     <Card
+      className="h-full"
       title={title}
       subtitle={subtitle}
-      bodyClassName="p-4"
+      bodyClassName="flex min-h-[74px] items-center p-3.5"
     >
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex w-full flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={disabled}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-300 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-carbon px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-graphite disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Paperclip size={14} />
           {fileName ? 'Cambiar archivo' : 'Adjuntar archivo'}
@@ -72,7 +73,7 @@ export function GeminiDocumentInput({
             </button>
           </span>
         ) : (
-          <span className="text-xs text-slate-400">
+          <span className="min-w-0 text-xs text-slate-400">
              {pdfOnly ? 'Ningún PDF seleccionado · PDF (máx. 6 MB)' : 'Ningún archivo seleccionado · PDF, PNG, JPG o WEBP (máx. 6 MB)'}
           </span>
         )}

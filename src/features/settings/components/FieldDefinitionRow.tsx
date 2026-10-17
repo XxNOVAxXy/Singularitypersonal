@@ -70,7 +70,7 @@ export function FieldDefinitionRow({
           onChange={(event) =>
             onChange(definition.id, { required: event.target.checked })
           }
-          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          className="h-4 w-4 rounded border-slate-300 text-graphite focus:ring-graphite"
         />
         Obligatorio
       </label>

@@ -16,7 +16,7 @@ export function ProgressBar({ value, className, barClassName }: ProgressBarProps
       )}
     >
       <div
-        className={cn('h-full rounded-full bg-brand-500', barClassName)}
+        className={cn('h-full rounded-full bg-graphite', barClassName)}
         style={{ width: `${clamped}%` }}
       />
     </div>

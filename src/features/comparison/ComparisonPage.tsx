@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { GitCompare } from 'lucide-react'
+import { GitCompare, GitCompareArrows, ListFilter } from 'lucide-react'
 import { documents } from '@/mocks/documents'
 import { getSnapshotsForDocument } from '@/mocks/snapshots'
 import { cn } from '@/lib/cn'
@@ -18,11 +18,11 @@ import {
 
 type FilterValue = 'all' | 'differences' | 'matches' | 'missing'
 
-const filterOptions: Array<{ value: FilterValue; label: string }> = [
-  { value: 'all', label: 'Todos' },
-  { value: 'differences', label: 'Diferentes' },
-  { value: 'matches', label: 'Coincidentes' },
-  { value: 'missing', label: 'Faltantes' },
+const filterOptions: Array<{ value: FilterValue; label: string; icon: typeof ListFilter }> = [
+  { value: 'all', label: 'Todos', icon: ListFilter },
+  { value: 'differences', label: 'Diferentes', icon: GitCompareArrows },
+  { value: 'matches', label: 'Coincidentes', icon: GitCompare },
+  { value: 'missing', label: 'Faltantes', icon: ListFilter },
 ]
 
 function applyFilter(rows: ComparisonRow[], filter: FilterValue): ComparisonRow[] {
@@ -71,6 +71,8 @@ export function ComparisonPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={<GitCompareArrows size={22} strokeWidth={1.8} />}
+        eyebrow="Control de calidad"
         title="Comparación de resultados"
         description="Herramienta complementaria para contrastar dos extracciones de un mismo documento."
       />
@@ -124,19 +126,24 @@ export function ComparisonPage() {
 
           <ComparisonSummary summary={summary} />
 
-          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-            {filterOptions.map((option) => (
+           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-2 shadow-[0_1px_2px_rgba(28,30,34,0.04)]">
+             <div className="flex items-center gap-2 px-2 text-xs font-semibold text-slate-500">
+               <ListFilter size={14} />
+               Filtrar resultados
+             </div>
+             {filterOptions.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => setFilter(option.value)}
                 className={cn(
-                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                   'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
                   filter === option.value
-                    ? 'bg-brand-50 text-brand-700'
+                     ? 'bg-slate-100 text-ink ring-1 ring-slate-200'
                     : 'text-slate-500 hover:bg-slate-100',
                 )}
               >
+                <option.icon size={13} />
                 {option.label}
               </button>
             ))}
