@@ -36,6 +36,10 @@ export default defineConfig(({ mode }) => {
           target: 'http://127.0.0.1:8000',
           changeOrigin: false,
         },
+        '/api/documents': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: false,
+        },
         '/api': {
           target: proxyTarget,
           changeOrigin: false,

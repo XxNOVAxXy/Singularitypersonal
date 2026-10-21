@@ -11,6 +11,14 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT_DIR / ".env")
 
 
+def _resolve_data_dir() -> Path:
+    """Directorio de datos; `DATA_DIR` permite aislar pruebas del entorno real."""
+    configured = os.getenv("DATA_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return ROOT_DIR / "backend" / "data"
+
+
 @dataclass(frozen=True)
 class Settings:
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
@@ -35,7 +43,7 @@ class Settings:
         for host in os.getenv("IMAP_ALLOWED_HOSTS", "").split(",")
         if host.strip()
     )
-    data_dir: Path = ROOT_DIR / "backend" / "data"
+    data_dir: Path = _resolve_data_dir()
 
     @property
     def gemini_models(self) -> tuple[str, ...]:

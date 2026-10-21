@@ -56,7 +56,10 @@ export function validateDocumentFile(file: {
     return { ok: false, message: 'El archivo está vacío.' }
   }
   if (file.size > MAX_DOCUMENT_BYTES) {
-    return { ok: false, message: 'El archivo supera el límite de 6 MB.' }
+    return {
+      ok: false,
+      message: `El archivo supera el límite de ${Math.round(MAX_DOCUMENT_BYTES / 1024 / 1024)} MB.`,
+    }
   }
   return { ok: true }
 }

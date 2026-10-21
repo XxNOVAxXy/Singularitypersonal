@@ -28,7 +28,7 @@ function GeminiHint({
 }) {
   if (status === 'extracting') {
     return (
-       <span className="inline-flex items-center gap-1.5 text-graphite">
+      <span className="inline-flex items-center gap-1.5 text-graphite">
         <Loader2 size={14} className="animate-spin" />
         Procesando documento…
       </span>
@@ -69,59 +69,55 @@ export function ExtractionToolbar({
             <span>Reglas locales</span>
           )}
         </div>
-<<<<<<< HEAD
-        <div className="flex items-center gap-2">
-          {method === 'manual' && onSave ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={isSaving ? <Loader2 size={14} className="animate-spin" /> : <FileSearch size={14} />}
-              onClick={onSave}
-              disabled={isSaving || isExtracting || !isDirty}
-            >
-              {isSaving ? 'Guardando' : 'Guardar'}
-            </Button>
-          ) : null}
-=======
       </div>
 
       <MethodSelector method={method} onChange={onChangeMethod} />
 
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
->>>>>>> origin/cambiossosme
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
+        {method === 'manual' && onSave ? (
           <Button
             variant="secondary"
             size="sm"
-            icon={<RotateCcw size={14} />}
-            onClick={onReset}
-            disabled={isExtracting}
+            icon={isSaving ? <Loader2 size={14} className="animate-spin" /> : <FileSearch size={14} />}
+            onClick={onSave}
+            disabled={isSaving || isExtracting || !isDirty}
           >
-            Restablecer
+            {isSaving ? 'Guardando' : 'Guardar'}
           </Button>
-          <Button
-            size="sm"
-            icon={
-              isExtracting ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : method === 'manual' ? (
-                <FileSearch size={14} />
-              ) : (
-                <Sparkles size={14} />
-              )
-            }
-            onClick={onRun}
-            disabled={!canRun}
-            title={
-              canRun
-                ? undefined
-                : status === 'done'
-                  ? 'El documento ya fue procesado. Restablece para ejecutarlo otra vez.'
-                  : 'Adjunta un documento para poder extraer'
-            }
-          >
-            {isExtracting ? 'Extrayendo…' : method === 'manual' ? 'Leer PDF' : 'Ejecutar extracción'}
-          </Button>
-        </div>
+        ) : null}
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<RotateCcw size={14} />}
+          onClick={onReset}
+          disabled={isExtracting}
+        >
+          Restablecer
+        </Button>
+        <Button
+          size="sm"
+          icon={
+            isExtracting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : method === 'manual' ? (
+              <FileSearch size={14} />
+            ) : (
+              <Sparkles size={14} />
+            )
+          }
+          onClick={onRun}
+          disabled={!canRun}
+          title={
+            canRun
+              ? undefined
+              : status === 'done'
+                ? 'El documento ya fue procesado. Restablece para ejecutarlo otra vez.'
+                : 'Adjunta un documento para poder extraer'
+          }
+        >
+          {isExtracting ? 'Extrayendo…' : method === 'manual' ? 'Leer PDF' : 'Ejecutar extracción'}
+        </Button>
+      </div>
     </div>
   )
 }

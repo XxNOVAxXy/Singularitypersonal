@@ -26,7 +26,9 @@ export function createApp(
   const app = express()
 
   app.disable('x-powered-by')
-  app.use(express.json({ limit: '10mb' }))
+  // 25 MB de documento ~34 MB en base64; el validador de extracción aplica el
+  // límite exacto de MAX_DOCUMENT_BYTES sobre el contenido decodificado.
+  app.use(express.json({ limit: '40mb' }))
 
   app.use('/api', healthRouter)
   app.use('/api', settingsRouter)

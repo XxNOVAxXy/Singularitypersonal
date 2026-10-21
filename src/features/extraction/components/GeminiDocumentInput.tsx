@@ -74,7 +74,7 @@ export function GeminiDocumentInput({
           </span>
         ) : (
           <span className="min-w-0 text-xs text-slate-400">
-             {pdfOnly ? 'Ningún PDF seleccionado · PDF (máx. 6 MB)' : 'Ningún archivo seleccionado · PDF, PNG, JPG o WEBP (máx. 6 MB)'}
+             {pdfOnly ? 'Ningún PDF seleccionado · PDF (máx. 25 MB)' : 'Ningún archivo seleccionado · PDF, PNG, JPG o WEBP (máx. 25 MB)'}
           </span>
         )}
       </div>

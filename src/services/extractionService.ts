@@ -26,7 +26,7 @@ export const EXTRACTION_ERROR_MESSAGES: Record<ExtractionErrorCode, string> = {
     'La solicitud no es válida. Revisa el documento e inténtalo de nuevo.',
   unsupported_media_type:
     'El tipo de archivo no es compatible. Usa PDF, PNG, JPG o WEBP.',
-  payload_too_large: 'El documento es demasiado grande (máximo 6 MB).',
+  payload_too_large: 'El documento es demasiado grande (máximo 25 MB).',
   configuration_error:
     'El servidor no tiene configurada la API de Gemini.',
   authentication_error:

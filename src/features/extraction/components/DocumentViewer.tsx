@@ -131,7 +131,13 @@ export function DocumentViewer({ document }: DocumentViewerProps) {
       <footer className="flex items-center justify-between border-t border-slate-100 px-5 py-2.5">
         <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
           <Eye size={13} />
-          {document.previewUrl ? 'Documento original desde Gmail' : 'Vista de demostración'}
+          {document.previewUrl
+            ? document.source === 'gmail'
+              ? 'Documento original desde Gmail'
+              : document.source === 'imap'
+                ? 'Documento original desde el correo'
+                : 'Documento original'
+            : 'Vista de demostración'}
         </span>
         {document.previewUrl ? (
           <a href={document.downloadUrl ?? document.previewUrl} download={document.name} className="text-xs font-medium text-graphite hover:text-ink">

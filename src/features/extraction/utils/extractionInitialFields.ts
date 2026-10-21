@@ -1,5 +1,5 @@
 import type { ExtractionField, ExtractionMethod } from '../../../../shared/types.ts'
-import type { DocumentFields } from './extractionPersistence.ts'
+import { canAdoptAsMethod, type DocumentFields } from './extractionPersistence.ts'
 
 export type InitialFieldsSource =
   | 'manual-restored'
@@ -25,19 +25,25 @@ export interface InitialFieldsResolution extends DocumentFields {
 export function resolveInitialFields(input: InitialFieldsInput): InitialFieldsResolution {
   const { documentId, method, storedFields, hasAttachment, initialFields, blankManualFields } = input
   if (method === 'manual') {
-    if (storedFields && storedFields.length > 0) {
-      return { documentId, fields: storedFields, source: 'manual-restored' }
+    // Una copia de sesión que en realidad contiene un resultado de Gemini no
+    // se restaura como captura manual: se parte de la plantilla en blanco.
+    if (
+      storedFields &&
+      storedFields.length > 0 &&
+      canAdoptAsMethod(method, storedFields)
+    ) {
+      return { documentId, method, fields: storedFields, source: 'manual-restored' }
     }
-    return { documentId, fields: blankManualFields, source: 'manual-blank' }
+    return { documentId, method, fields: blankManualFields, source: 'manual-blank' }
   }
   if (hasAttachment) {
-    return { documentId, fields: [], source: 'attachment' }
+    return { documentId, method, fields: [], source: 'attachment' }
   }
   if (storedFields && storedFields.length > 0) {
-    return { documentId, fields: storedFields, source: 'stored' }
+    return { documentId, method, fields: storedFields, source: 'stored' }
   }
   if (initialFields && initialFields.length > 0) {
-    return { documentId, fields: initialFields, source: 'initial' }
+    return { documentId, method, fields: initialFields, source: 'initial' }
   }
-  return { documentId, fields: [], source: 'empty' }
+  return { documentId, method, fields: [], source: 'empty' }
 }

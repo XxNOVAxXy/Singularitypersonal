@@ -83,6 +83,10 @@ def generate_pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
+def compute_content_hash(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
 class GmailClient:
     def __init__(self, storage: GmailStorage) -> None:
         self.storage = storage
@@ -206,16 +210,23 @@ class GmailClient:
                 "hasAttachments": bool(attachments), "inlineResources": inline_resources,
                 "policyType": "Póliza" if POLICY_TERMS.search(all_text) else "Documento",
                 "isPolicyRelated": bool(POLICY_TERMS.search(all_text)),
-                "attachments": [self._attachment_response(item) for item in attachments]}
+                "attachments": [self._attachment_response(item, raw.get("id", "")) for item in attachments]}
 
-    def _attachment_response(self, item: GmailAttachment) -> dict[str, Any]:
+    def _attachment_response(self, item: GmailAttachment, message_id: str = "") -> dict[str, Any]:
+        status = "pending"
+        if message_id:
+            entry = self.storage.document_by_source(message_id=message_id, attachment_id=item.id)
+            if entry is not None:
+                status = str(entry.get("status", "pending"))
+        if status == "pending":
+            status = self.storage.document_status(item.fingerprint)
         return {"id": item.fingerprint, "attachmentId": item.id, "name": item.name,
                 "attachmentKey": item.fingerprint,
                 "type": "pdf" if item.is_pdf else ("image" if item.mime_type.startswith("image/") else "file"),
                 "mimeType": item.mime_type, "size": self._size_label(item.size),
                 "isPdf": item.is_pdf, "isImage": item.mime_type.startswith("image/"),
                 "isPreviewable": item.is_pdf or item.mime_type in IMAGE_MIMES,
-                "extractionStatus": self.storage.document_status(item.fingerprint)}
+                "extractionStatus": status}
 
     @staticmethod
     def _addresses(value: str) -> list[dict[str, str]]:
