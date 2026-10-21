@@ -75,8 +75,8 @@ test('rechaza base64 inválido', () => {
 
 test('rechaza documento demasiado grande con 413', () => {
   const body = validBody()
-  // Longitud múltiplo de 4 sin relleno -> decodifica a > 6 MB.
-  body.document.dataBase64 = 'A'.repeat(8 * 1024 * 1024 + 4)
+  // Longitud múltiplo de 4 sin relleno -> decodifica a > 25 MB.
+  body.document.dataBase64 = 'A'.repeat(34 * 1024 * 1024 + 4)
   const result = validateExtractionRequest(body)
   assert.equal(result.ok, false)
   if (!result.ok) {

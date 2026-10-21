@@ -73,10 +73,10 @@ test('escenario 1 (precondición) — sin captura guardada la lectura devuelve n
 test('escenario 5 — Guardar persiste bajo el método manual y el documentId correctos', () => {
   const storage = new FakeStorage()
   const fields = [field('premium', '1500')]
-  const snapshot = { documentId: 'doc-A', fields }
+  const snapshot = { documentId: 'doc-A', method: MANUAL, fields }
 
   // La futura acción Guardar solo debe escribir tras pasar la guarda de identidad.
-  assert.equal(shouldPersistExtraction('doc-A', 'done', snapshot), true)
+  assert.equal(shouldPersistExtraction('doc-A', 'done', snapshot, MANUAL), true)
   writeStoredExtraction('doc-A', MANUAL, snapshot.fields, storage)
 
   assert.ok(storage.has(extractionStorageKey('doc-A', MANUAL)))
@@ -86,10 +86,10 @@ test('escenario 5 — Guardar persiste bajo el método manual y el documentId co
 })
 
 test('escenario 5 (identidad) — no se guarda si el documentId de los campos no es el activo', () => {
-  const snapshot = { documentId: 'doc-A', fields: [field('premium', '1')] }
-  assert.equal(shouldPersistExtraction('doc-B', 'done', snapshot), false)
-  assert.equal(shouldPersistExtraction(null, 'done', snapshot), false)
-  assert.equal(shouldPersistExtraction('doc-A', 'ready', snapshot), false)
+  const snapshot = { documentId: 'doc-A', method: MANUAL, fields: [field('premium', '1')] }
+  assert.equal(shouldPersistExtraction('doc-B', 'done', snapshot, MANUAL), false)
+  assert.equal(shouldPersistExtraction(null, 'done', snapshot, MANUAL), false)
+  assert.equal(shouldPersistExtraction('doc-A', 'ready', snapshot, MANUAL), false)
 })
 
 test('escenario 7 — la transición A → B no mezcla capturas manuales ni sobrescribe B', () => {
@@ -100,8 +100,8 @@ test('escenario 7 — la transición A → B no mezcla capturas manuales ni sobr
   writeStoredExtraction('B', MANUAL, fieldsFromB, storage)
 
   // Commit de React al cambiar de documento: activo B, campos aún de A.
-  const transition = { documentId: 'A', fields: fieldsFromA }
-  if (shouldPersistExtraction('B', 'done', transition)) {
+  const transition = { documentId: 'A', method: MANUAL, fields: fieldsFromA }
+  if (shouldPersistExtraction('B', 'done', transition, MANUAL)) {
     writeStoredExtraction('B', MANUAL, transition.fields, storage)
   }
 
@@ -137,7 +137,12 @@ test('escenario 9 — manual y gemini usan claves distintas y no se pisan', () =
   assert.deepEqual(readStoredExtraction('doc-A', MANUAL, storage)?.fields, manualFields)
   // La guarda del flujo Gemini se conserva tal cual (Bug 3 intacto).
   assert.equal(
-    shouldPersistExtraction('doc-A', 'done', { documentId: 'doc-A', fields: geminiFields }),
+    shouldPersistExtraction(
+      'doc-A',
+      'done',
+      { documentId: 'doc-A', method: GEMINI, fields: geminiFields },
+      GEMINI,
+    ),
     true,
   )
 })

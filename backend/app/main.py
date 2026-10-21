@@ -13,7 +13,7 @@ from fastapi.responses import RedirectResponse, Response
 
 from .config import settings
 from .extraction import extract_document
-from .gmail import GmailClient, generate_pkce_pair
+from .gmail import GmailClient, compute_content_hash, generate_pkce_pair
 from .imap_service import ImapError, ImapService
 from .imap_storage import LOCAL_OWNER_ID, ImapStorage
 from .storage import GmailStorage
@@ -226,6 +226,30 @@ def imap_account_folders(account_id: str) -> dict[str, object]:
     return {"folders": folders}
 
 
+def _imap_attachment_status(account_id: str, message_id: str, attachment_id: str) -> str:
+    entry = storage.document_by_source(message_id=message_id, attachment_id=attachment_id, account_id=account_id)
+    if entry is None:
+        return "pending"
+    status = str(entry.get("status", "pending"))
+    if status in {"extracted", "not-policy", "processing", "error"}:
+        return status
+    return "pending"
+
+
+def _annotate_imap_messages(messages: list[dict[str, object]], account_id: str) -> list[dict[str, object]]:
+    for message in messages:
+        message_id = str(message.get("id") or "")
+        attachments = message.get("attachments")
+        if not isinstance(attachments, list):
+            continue
+        for attachment in attachments:
+            if isinstance(attachment, dict):
+                attachment["extractionStatus"] = _imap_attachment_status(
+                    account_id, message_id, str(attachment.get("id") or ""),
+                )
+    return messages
+
+
 @app.get("/api/imap/messages")
 def imap_messages(
     account_id: str = Query(..., min_length=1, max_length=100),
@@ -236,7 +260,7 @@ def imap_messages(
     if account is None:
         raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
     try:
-        messages = imap.list_messages(account, folder, limit)
+        messages = _annotate_imap_messages(imap.list_messages(account, folder, limit), account_id)
     except Exception as error:
         raise _imap_connection_error(error) from error
     return {"messages": messages, "accountId": account_id, "folder": folder, "count": len(messages)}
@@ -248,7 +272,9 @@ def imap_message(message_id: str, account_id: str = Query(..., min_length=1, max
     if account is None:
         raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
     try:
-        return imap.get_message(account, unquote(message_id).strip())
+        message = imap.get_message(account, unquote(message_id).strip())
+        _annotate_imap_messages([message], account_id)
+        return message
     except Exception as error:
         raise _imap_connection_error(error) from error
 
@@ -318,10 +344,16 @@ def gmail_documents() -> dict[str, object]:
             "id": fingerprint,
             "filename": str(entry.get("filename", "document.pdf")),
             "status": str(entry.get("status", "pending")),
+            "origin": storage.document_origin(entry),
             "result": result,
             "messageId": source.get("messageId"),
             "attachmentId": source.get("attachmentId"),
             "attachmentKey": source.get("attachmentKey", fingerprint),
+            "contentHash": entry.get("contentHash"),
+            "sizeBytes": entry.get("sizeBytes"),
+            "mimeType": entry.get("mimeType"),
+            "uploadedAt": entry.get("uploadedAt"),
+            "sources": entry.get("sources") if isinstance(entry.get("sources"), list) else [],
             "createdAt": result.get("extractedAt") if result else None,
         })
     documents.sort(key=lambda item: str(item.get("createdAt") or ""), reverse=True)
@@ -368,6 +400,39 @@ def gmail_attachment(message_id: str, attachment_id: str,
         raise HTTPException(status_code=502, detail="No fue posible descargar el archivo") from exc
 
 
+def _store_attachment_extraction(content: bytes, filename: str, origin: str,
+                                 source: dict[str, object], method: Literal["rules", "gemini"],
+                                 suggested_id: str | None) -> dict[str, object]:
+    content_hash = compute_content_hash(content)
+    by_source = storage.document_by_source(
+        message_id=str(source.get("messageId") or "") or None,
+        attachment_id=str(source.get("attachmentId") or "") or None,
+        account_id=str(source.get("accountId") or "") or None,
+    )
+    if by_source is not None and by_source.get("result"):
+        return dict(by_source["result"])
+    record = storage.register_document(
+        content, filename, content_hash, "application/pdf",
+        origin=origin, source=source, suggested_id=suggested_id,
+    )
+    document_id = str(record["id"])
+    storage.set_document_status(
+        document_id, "processing", filename=filename,
+    )
+    result = extract_document(filename, content, method, "application/pdf")
+    result["documentStatus"] = "extracted" if result.get("policyType") else "not-policy"
+    result["documentId"] = document_id
+    result["source"] = record.get("source") or source
+    storage.set_document_status(
+        document_id,
+        str(result["documentStatus"]),
+        filename=filename,
+        result=result,
+        source=result["source"],
+    )
+    return result
+
+
 @app.post("/api/gmail/attachments/{message_id}/{attachment_id}/extract")
 def extract_gmail_attachment(message_id: str, attachment_id: str,
                              method: Literal["rules", "gemini"] = Query("gemini")) -> dict[str, object]:
@@ -375,24 +440,13 @@ def extract_gmail_attachment(message_id: str, attachment_id: str,
         attachment = gmail.attachment_info(message_id, attachment_id)
         if attachment is None or not attachment.is_pdf:
             raise ValueError("Solo se pueden extraer archivos PDF")
-        existing = storage.document_record(attachment.fingerprint)
-        if existing and existing.get("result"):
-            return existing["result"]
-        storage.set_document_status(attachment.fingerprint, "processing", filename=attachment.name)
         content, filename, fingerprint = gmail.download(message_id, attachment_id, attachment)
-        result = extract_document(filename, content, method, "application/pdf")
-        result["documentStatus"] = "extracted" if result.get("policyType") else "not-policy"
-        result["documentId"] = fingerprint
-        result["source"] = {"messageId": message_id, "attachmentId": attachment.id,
-                            "attachmentKey": attachment.fingerprint}
-        storage.set_document_status(
-            fingerprint,
-            result["documentStatus"],
-            filename=filename,
-            result=result,
-            source=result["source"],
+        return _store_attachment_extraction(
+            content, filename, "gmail",
+            {"messageId": message_id, "attachmentId": attachment.id,
+             "attachmentKey": attachment.fingerprint},
+            method, fingerprint,
         )
-        return result
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
@@ -400,6 +454,38 @@ def extract_gmail_attachment(message_id: str, attachment_id: str,
     except Exception as exc:
         logger.error("Attachment extraction failed: %s", type(exc).__name__)
         raise HTTPException(status_code=502, detail="No fue posible extraer el documento") from exc
+
+
+@app.post("/api/imap/attachments/{message_id}/{attachment_id}/extract")
+def extract_imap_attachment(
+    message_id: str,
+    attachment_id: str,
+    account_id: str = Query(..., min_length=1, max_length=100),
+    method: Literal["rules", "gemini"] = Query("gemini"),
+) -> dict[str, object]:
+    account = imap_storage.get_account(account_id, LOCAL_OWNER_ID)
+    if account is None:
+        raise HTTPException(status_code=404, detail="La cuenta IMAP no existe")
+    try:
+        content, filename, mime_type = imap.download_attachment(
+            account,
+            unquote(message_id).strip(),
+            unquote(attachment_id).strip(),
+        )
+        if mime_type != "application/pdf" and not filename.lower().endswith(".pdf"):
+            raise ValueError("Solo se pueden extraer archivos PDF")
+        return _store_attachment_extraction(
+            content, filename, "imap",
+            {"accountId": account_id, "messageId": unquote(message_id).strip(),
+             "attachmentId": unquote(attachment_id).strip()},
+            method, None,
+        )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as error:
+        raise _imap_connection_error(error) from error
 
 
 @app.post("/api/extractions/{method}")
@@ -420,3 +506,131 @@ async def extraction(
         if not content.startswith(b"%PDF-"):
             raise HTTPException(status_code=415, detail="El archivo no contiene un PDF válido")
     return extract_document(filename, content, method, content_type, policy_type)
+
+
+ALLOWED_DOCUMENT_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/webp"}
+
+
+def _validate_upload(filename: str, content_type: str, content: bytes) -> None:
+    if content_type not in ALLOWED_DOCUMENT_TYPES and not filename.lower().endswith(
+            (".pdf", ".png", ".jpg", ".jpeg", ".webp")):
+        raise HTTPException(status_code=415, detail="Solo se aceptan PDF, PNG, JPG o WEBP")
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="El archivo supera el límite de 25 MB")
+    if content_type == "application/pdf" or filename.lower().endswith(".pdf"):
+        if not content.startswith(b"%PDF-"):
+            raise HTTPException(status_code=415, detail="El archivo no contiene un PDF válido")
+
+
+@app.get("/api/documents")
+def documents() -> dict[str, object]:
+    items: list[dict[str, object]] = []
+    for fingerprint, entry in storage.document_records():
+        result = entry.get("result") if isinstance(entry.get("result"), dict) else None
+        items.append({
+            "id": fingerprint,
+            "filename": str(entry.get("filename", "document.pdf")),
+            "status": str(entry.get("status", "pending")),
+            "origin": storage.document_origin(entry),
+            "contentHash": entry.get("contentHash"),
+            "sizeBytes": entry.get("sizeBytes"),
+            "mimeType": entry.get("mimeType"),
+            "uploadedAt": entry.get("uploadedAt"),
+            "sources": entry.get("sources") if isinstance(entry.get("sources"), list) else [],
+            "result": result,
+            "createdAt": result.get("extractedAt") if result else entry.get("uploadedAt"),
+        })
+    items.sort(key=lambda item: str(item.get("createdAt") or ""), reverse=True)
+    return {"documents": items, "count": len(items)}
+
+
+@app.post("/api/documents")
+async def register_document(
+    file: UploadFile = File(...),
+    force_new: bool = Query(False),
+) -> dict[str, object]:
+    filename = file.filename or "document.pdf"
+    content_type = file.content_type or ""
+    content = await file.read()
+    _validate_upload(filename, content_type, content)
+    content_hash = compute_content_hash(content)
+    return storage.register_manual_document(
+        content, filename, content_hash, content_type, force_new=force_new,
+    )
+
+
+@app.get("/api/documents/{document_id}/extractions")
+def get_document_extractions(document_id: str) -> dict[str, object]:
+    key = unquote(document_id).strip()
+    if storage.document_record(key) is None:
+        raise HTTPException(status_code=404, detail="El documento no existe")
+    return {"documentId": key, "extractions": storage.list_extractions(key)}
+
+
+@app.put("/api/documents/{document_id}/extractions/{method}")
+def put_document_extraction(
+    document_id: str,
+    method: Literal["manual", "gemini"],
+    payload: dict[str, object] = Body(...),
+) -> dict[str, object]:
+    key = unquote(document_id).strip()
+    if storage.document_record(key) is None:
+        raise HTTPException(status_code=404, detail="El documento no existe")
+    fields = payload.get("fields")
+    if not isinstance(fields, list):
+        raise HTTPException(status_code=400, detail="El campo 'fields' es obligatorio")
+    stored = {
+        "fields": fields,
+        "updatedAt": str(payload.get("updatedAt") or datetime.now(timezone.utc).isoformat()),
+        "method": method,
+    }
+    storage.set_extraction(key, method, stored)
+    return {"documentId": key, "method": method, "extraction": stored}
+
+
+@app.delete("/api/documents/{document_id}/extractions/{method}")
+def delete_document_extraction(
+    document_id: str,
+    method: Literal["manual", "gemini"],
+) -> dict[str, object]:
+    key = unquote(document_id).strip()
+    if not storage.remove_extraction(key, method):
+        raise HTTPException(status_code=404, detail="La extracción no existe")
+    remaining = sorted(storage.list_extractions(key).keys())
+    return {"documentId": key, "method": method, "remaining": remaining}
+
+
+@app.get("/api/documents/{document_id}/file")
+def document_file(document_id: str, download: bool = Query(False)) -> Response:
+    key = unquote(document_id).strip()
+    entry = storage.document_record(key)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="El archivo del documento no está disponible")
+    target = storage.download_dir / f"{key}.bin"
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="El archivo del documento no está disponible")
+    filename = str(entry.get("filename", "document.pdf"))
+    safe_name = quote(filename.replace("\r", "").replace("\n", ""), safe="")
+    disposition = "attachment" if download else "inline"
+    return Response(
+        content=target.read_bytes(),
+        media_type=str(entry.get("mimeType", "application/octet-stream")),
+        headers={"Cache-Control": "private, max-age=300",
+                 "Content-Disposition": f'{disposition}; filename="{safe_name}"'},
+    )
+
+
+@app.delete("/api/documents/{document_id}")
+def delete_document(document_id: str) -> dict[str, object]:
+    key = unquote(document_id).strip()
+    try:
+        storage.delete_document(key)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="El documento no existe") from exc
+    except PermissionError as exc:
+        if str(exc) in {"gmail", "imap"}:
+            raise HTTPException(status_code=403,
+                                detail="Los documentos recibidos por correo no se pueden eliminar") from exc
+        raise HTTPException(status_code=403,
+                            detail="El documento no se puede eliminar") from exc
+    return {"id": key, "deleted": True}

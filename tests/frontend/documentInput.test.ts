@@ -50,14 +50,14 @@ test('validateDocumentFile rechaza archivos vacíos', () => {
   assert.equal(result.ok, false)
 })
 
-test('validateDocumentFile rechaza archivos mayores a 6 MB', () => {
+test('validateDocumentFile rechaza archivos mayores a 25 MB', () => {
   const result = validateDocumentFile({
     name: 'poliza.pdf',
     type: 'application/pdf',
-    size: 6 * 1024 * 1024 + 1,
+    size: 25 * 1024 * 1024 + 1,
   })
   assert.equal(result.ok, false)
-  assert.match(result.message ?? '', /6 MB/)
+  assert.match(result.message ?? '', /25 MB/)
 })
 
 test('arrayBufferToBase64 coincide con la codificación esperada', () => {

@@ -100,7 +100,7 @@ test('POST /api/extract responde 413 si el documento es demasiado grande', async
   await withServer(okGateway, async (baseUrl) => {
     const body = validPayload()
     ;(body.document as Record<string, unknown>).dataBase64 = 'A'.repeat(
-      8 * 1024 * 1024 + 4,
+      34 * 1024 * 1024 + 4,
     )
     const response = await postExtract(baseUrl, body)
     assert.equal(response.status, 413)

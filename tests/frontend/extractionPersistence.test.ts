@@ -64,11 +64,12 @@ function legacyShouldPersist(
 function persistFromEffect(
   activeDocumentId: string | null,
   status: ExtractionStatus,
-  snapshot: { documentId: string | null; fields: ExtractionField[] },
+  snapshot: { documentId: string | null; method: ExtractionMethod | null; fields: ExtractionField[] },
   storage: ExtractionStorage,
+  method: ExtractionMethod = METHOD,
 ): void {
-  if (!shouldPersistExtraction(activeDocumentId, status, snapshot)) return
-  writeStoredExtraction(activeDocumentId as string, METHOD, snapshot.fields, storage)
+  if (!shouldPersistExtraction(activeDocumentId, status, snapshot, method)) return
+  writeStoredExtraction(activeDocumentId as string, method, snapshot.fields, storage)
 }
 
 test('la condición original reproducía el guardado de campos de A bajo el ID de B', () => {
@@ -79,10 +80,10 @@ test('la condición original reproducía el guardado de campos de A bajo el ID d
 test('cambio A → B: los campos de A nunca se guardan bajo el ID de B', () => {
   const storage = new FakeStorage()
   const fieldsFromA = [field('premium', '1000')]
-  persistFromEffect('A', 'done', { documentId: 'A', fields: fieldsFromA }, storage)
+  persistFromEffect('A', 'done', { documentId: 'A', method: METHOD, fields: fieldsFromA }, storage)
 
   // React confirmó el cambio a B: documento activo B, campos todavía de A.
-  persistFromEffect('B', 'done', { documentId: 'A', fields: fieldsFromA }, storage)
+  persistFromEffect('B', 'done', { documentId: 'A', method: METHOD, fields: fieldsFromA }, storage)
 
   assert.equal(readStoredExtraction('B', METHOD, storage), null)
   const storedA = readStoredExtraction('A', METHOD, storage)
@@ -101,7 +102,7 @@ test('hidratación: B recupera exactamente los campos que pertenecen a B', () =>
 test('edición: los campos editados de B se persisten bajo el ID de B', () => {
   const storage = new FakeStorage()
   const editedB = [field('premium', '9999')]
-  persistFromEffect('B', 'done', { documentId: 'B', fields: editedB }, storage)
+  persistFromEffect('B', 'done', { documentId: 'B', method: METHOD, fields: editedB }, storage)
 
   assert.deepEqual(readStoredExtraction('B', METHOD, storage)?.fields, editedB)
 })
@@ -114,23 +115,31 @@ test('regresión: cambiar de documento no borra ni sobrescribe resultados ajenos
   writeStoredExtraction('B', METHOD, fieldsFromB, storage)
 
   // Transición A → B con campos de A aún en memoria.
-  persistFromEffect('B', 'done', { documentId: 'A', fields: fieldsFromA }, storage)
+  persistFromEffect('B', 'done', { documentId: 'A', method: METHOD, fields: fieldsFromA }, storage)
 
   assert.deepEqual(readStoredExtraction('A', METHOD, storage)?.fields, fieldsFromA)
   assert.deepEqual(readStoredExtraction('B', METHOD, storage)?.fields, fieldsFromB)
 })
 
 test('no persiste mientras la extracción no ha terminado', () => {
-  const snapshot = { documentId: 'A', fields: [field('premium', '1000')] }
-  assert.equal(shouldPersistExtraction('A', 'extracting', snapshot), false)
-  assert.equal(shouldPersistExtraction('A', 'ready', snapshot), false)
-  assert.equal(shouldPersistExtraction('A', 'error', snapshot), false)
+  const snapshot = { documentId: 'A', method: METHOD, fields: [field('premium', '1000')] }
+  assert.equal(shouldPersistExtraction('A', 'extracting', snapshot, METHOD), false)
+  assert.equal(shouldPersistExtraction('A', 'ready', snapshot, METHOD), false)
+  assert.equal(shouldPersistExtraction('A', 'error', snapshot, METHOD), false)
 })
 
 test('no persiste un conjunto de campos vacío ni sin documento activo', () => {
-  assert.equal(shouldPersistExtraction('A', 'done', { documentId: 'A', fields: [] }), false)
   assert.equal(
-    shouldPersistExtraction(null, 'done', { documentId: null, fields: [field('x', '1')] }),
+    shouldPersistExtraction('A', 'done', { documentId: 'A', method: METHOD, fields: [] }, METHOD),
+    false,
+  )
+  assert.equal(
+    shouldPersistExtraction(
+      null,
+      'done',
+      { documentId: null, method: METHOD, fields: [field('x', '1')] },
+      METHOD,
+    ),
     false,
   )
 })

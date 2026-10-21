@@ -1,4 +1,4 @@
-import { Bell, ChevronRight, Menu, Search } from 'lucide-react'
+import { Bell, ChevronRight, Menu } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 
 interface TopbarProps {

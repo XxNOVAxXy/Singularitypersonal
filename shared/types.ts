@@ -2,7 +2,7 @@ export type ExtractionMethod = 'manual' | 'gemini'
 
 export type PolicyType = 'auto' | 'gmm' | 'vida' | 'fianza' | 'danos' | 'recibo'
 
-export type DocumentStatus = 'pending' | 'in_review' | 'reviewed'
+export type DocumentStatus = 'pending' | 'in_review' | 'reviewed' | 'error'
 
 export type DocumentFileType = 'pdf' | 'image' | 'xlsx' | 'file'
 
@@ -33,7 +33,7 @@ export interface PolicyDocument {
   receivedAt: string
   status: DocumentStatus
   emailId?: string
-  source?: 'demo' | 'gmail' | 'imap'
+  source?: 'demo' | 'gmail' | 'imap' | 'manual'
   previewUrl?: string
   downloadUrl?: string
   extractionFields?: ExtractionField[]

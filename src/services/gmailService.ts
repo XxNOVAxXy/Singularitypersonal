@@ -94,10 +94,16 @@ export interface GmailDocumentRecord {
   id: string
   filename: string
   status: 'pending' | 'processing' | 'extracted' | 'not-policy' | 'error'
+  origin?: string
   result?: unknown
   messageId?: string
   attachmentId?: string
   attachmentKey?: string
+  contentHash?: string | null
+  sizeBytes?: number | null
+  mimeType?: string | null
+  uploadedAt?: string | null
+  sources?: unknown[]
   createdAt?: string
 }
 

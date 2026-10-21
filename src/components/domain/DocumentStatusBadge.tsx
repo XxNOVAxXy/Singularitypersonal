@@ -12,6 +12,7 @@ const statusConfig: Record<
   pending: { label: 'Pendiente', tone: 'warning' },
   in_review: { label: 'En revisión', tone: 'info' },
   reviewed: { label: 'Revisado', tone: 'success' },
+  error: { label: 'Error', tone: 'danger' },
 }
 
 export function DocumentStatusBadge({ status }: DocumentStatusBadgeProps) {

@@ -68,6 +68,7 @@ export function DocumentSelector({
               { value: 'pending', label: 'Pendientes' },
               { value: 'in_review', label: 'En revisión' },
               { value: 'reviewed', label: 'Revisados' },
+              { value: 'error', label: 'Con error' },
             ] as Array<{ value: FilterValue; label: string }>
           ).map((option) => (
             <button
@@ -116,7 +117,13 @@ export function DocumentSelector({
                       {document.insurer} · {document.client}
                     </p>
                     <p className="mt-1 text-[10px] font-medium text-graphite">
-                      {document.source === 'gmail' ? 'Resultado guardado en backend' : 'Datos de demostración'}
+                      {document.source === 'demo' || document.source === undefined
+                        ? 'Datos de demostración'
+                        : document.source === 'gmail'
+                          ? 'Guardado desde Gmail'
+                          : document.source === 'imap'
+                            ? 'Guardado desde el correo'
+                            : 'Registrado en el servidor'}
                     </p>
                     <div className="mt-1.5 flex items-center gap-2">
                       <DocumentStatusBadge status={document.status} />

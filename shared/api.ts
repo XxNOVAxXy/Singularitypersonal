@@ -11,8 +11,8 @@ export const SUPPORTED_MIME_TYPES = [
 
 export type SupportedMimeType = (typeof SUPPORTED_MIME_TYPES)[number]
 
-/** Límite del tamaño del documento (decodificado desde base64). */
-export const MAX_DOCUMENT_BYTES = 6 * 1024 * 1024
+/** Límite único del tamaño del documento (decodificado desde base64). */
+export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024
 
 export interface ExtractionDocumentInput {
   name: string

@@ -15,6 +15,7 @@ import {
   GmailServiceError,
 } from '@/services/gmailService'
 import {
+  extractImapAttachment,
   getImapAccounts,
   getImapMessage,
   getImapMessages,
@@ -143,21 +144,31 @@ export function EmailsPage() {
   }
 
   const handleExtract = async (attachment: EmailAttachment) => {
-    if (!selectedEmail?.id || !attachment.id || !attachment.isPdf || selectedEmail.source !== 'gmail') return
+    if (!selectedEmail?.id || !attachment.id || !attachment.isPdf) return
+    if (selectedEmail.source !== 'gmail' && selectedEmail.source !== 'imap') return
     setExtractingId(attachment.id)
     setError(null)
     setMessages((current) => updateAttachmentStatus(current, selectedEmail.id, attachment.id, 'processing'))
     try {
-      const result = await extractGmailAttachment(selectedEmail.id, attachment.id) as { documentStatus?: ExtractionStatus }
+      const result = selectedEmail.source === 'gmail'
+        ? await extractGmailAttachment(selectedEmail.id, attachment.id) as { documentId?: string; documentStatus?: ExtractionStatus }
+        : await extractImapAttachment(selectedEmail.accountId ?? selectedAccountId ?? '', selectedEmail.id, attachment.id)
       const status = result.documentStatus ?? 'extracted'
       const updatedEmail = updateAttachmentStatus(messages, selectedEmail.id, attachment.id, status).find((item) => item.id === selectedEmail.id) ?? selectedEmail
-      sessionStorage.setItem('singularity.pendingExtraction', JSON.stringify({ email: updatedEmail, attachment: { ...attachment, extractionStatus: status } }))
-      sessionStorage.setItem('singularity.extractionResult', JSON.stringify(result))
+      sessionStorage.setItem('singularity.pendingExtraction', JSON.stringify({
+        email: updatedEmail,
+        attachment: { ...attachment, documentId: result.documentId, extractionStatus: status },
+        result,
+      }))
       setMessages((current) => updateAttachmentStatus(current, selectedEmail.id, attachment.id, status))
       navigate('/extraccion')
     } catch (reason) {
       setMessages((current) => updateAttachmentStatus(current, selectedEmail.id, attachment.id, 'error'))
-      setError(reason instanceof GmailServiceError ? reason.message : 'No fue posible extraer el documento.')
+      setError(
+        reason instanceof GmailServiceError || reason instanceof ImapServiceError
+          ? reason.message
+          : 'No fue posible extraer el documento.',
+      )
     } finally {
       setExtractingId(null)
     }
@@ -255,7 +266,7 @@ export function EmailsPage() {
             <EmailTable emails={visibleMessages} selectedId={selectedId} onSelect={(email) => void selectEmail(email)} />
           </section>
 
-          {selectedEmail ? <EmailDetail email={selectedEmail} loading={detailLoading} onExtract={selectedEmail.source === 'gmail' ? handleExtract : undefined} extractingId={extractingId} onClose={() => setSelectedId(null)} /> : <section className="reader-empty"><EmptyState icon={<Mail size={28} />} title="Selecciona un correo" description="Elige un mensaje de la lista para ver su contenido y adjuntos." /></section>}
+          {selectedEmail ? <EmailDetail email={selectedEmail} loading={detailLoading} onExtract={selectedEmail.source === 'gmail' || selectedEmail.source === 'imap' ? handleExtract : undefined} extractingId={extractingId} onClose={() => setSelectedId(null)} /> : <section className="reader-empty"><EmptyState icon={<Mail size={28} />} title="Selecciona un correo" description="Elige un mensaje de la lista para ver su contenido y adjuntos." /></section>}
         </div>
       </> : null}
     </div>

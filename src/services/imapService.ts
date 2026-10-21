@@ -103,6 +103,24 @@ export function getImapMessage(accountId: string, messageId: string): Promise<Em
   return request<unknown>(`/api/imap/messages/${encodeURIComponent(messageId)}?${params.toString()}`).then((message) => normalizeMessage(message, accountId))
 }
 
+export interface ImapExtractionResult {
+  documentId?: string
+  documentStatus?: 'extracted' | 'not-policy' | 'error'
+  source?: unknown
+}
+
+export function extractImapAttachment(
+  accountId: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<ImapExtractionResult> {
+  const params = new URLSearchParams({ account_id: accountId, method: 'gemini' })
+  return request<ImapExtractionResult>(
+    `/api/imap/attachments/${encodeURIComponent(messageId)}/${encodeURIComponent(attachmentId)}/extract?${params.toString()}`,
+    { method: 'POST' },
+  )
+}
+
 function jsonRequest(input: ImapAccountInput, method = 'POST'): RequestInit {
   return {
     method,
@@ -148,6 +166,7 @@ function normalizeAttachment(value: unknown): EmailAttachment {
   const mimeType = typeof item.mimeType === 'string' ? item.mimeType : undefined
   const isPdf = item.isPdf === true || mimeType === 'application/pdf'
   const isImage = item.isImage === true || Boolean(mimeType?.startsWith('image/'))
+  const extractionStatus = item.extractionStatus
   return {
     id: String(item.id ?? ''),
     name: String(item.name ?? 'adjunto'),
@@ -156,6 +175,9 @@ function normalizeAttachment(value: unknown): EmailAttachment {
     mimeType,
     isPdf,
     isImage,
+    extractionStatus: extractionStatus === 'pending' || extractionStatus === 'processing' || extractionStatus === 'extracted' || extractionStatus === 'not-policy' || extractionStatus === 'error'
+      ? extractionStatus
+      : undefined,
     downloadUrl: absoluteUrl(item.downloadUrl),
     previewUrl: absoluteUrl(item.previewUrl),
   }

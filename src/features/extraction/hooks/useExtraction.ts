@@ -17,6 +17,7 @@ import {
   reduceExtractionRunState,
 } from '@/features/extraction/utils/extractionState'
 import {
+  canAdoptAsMethod,
   clearStoredExtraction,
   readStoredExtraction,
   shouldPersistExtraction,
@@ -24,6 +25,7 @@ import {
   type DocumentFields,
   type ExtractionStorage,
 } from '@/features/extraction/utils/extractionPersistence'
+import { decideSessionMigration } from '@/features/extraction/utils/catalog'
 import { resolveInitialFields } from '@/features/extraction/utils/extractionInitialFields'
 import { toFieldKey } from '@/lib/slug'
 import {
@@ -32,74 +34,20 @@ import {
   extractFromFile,
   extractWithRules,
 } from '@/services/extractionService'
+import {
+  getDocumentExtractions,
+  saveDocumentExtraction,
+} from '@/services/documentService'
 
 export interface NewFieldInput {
   label: string
   kind: FieldKind
 }
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
 function getSessionStorage(): ExtractionStorage | null {
   return typeof window === 'undefined' ? null : window.sessionStorage
 }
 
->>>>>>> Stashed changes
-=======
-interface StoredExtraction {
-  fields: ExtractionField[]
-  updatedAt: string
-}
-
-function storageKey(documentId: string, method: ExtractionMethod): string {
-  return `singularity.extraction.${method}.${encodeURIComponent(documentId)}`
-}
-
-function readStoredExtraction(
-  documentId: string,
-  method: ExtractionMethod,
-): StoredExtraction | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = window.sessionStorage.getItem(storageKey(documentId, method))
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<StoredExtraction>
-    return Array.isArray(parsed.fields) && typeof parsed.updatedAt === 'string'
-      ? { fields: parsed.fields, updatedAt: parsed.updatedAt }
-      : null
-  } catch {
-    return null
-  }
-}
-
-function storeExtraction(
-  documentId: string,
-  method: ExtractionMethod,
-  fields: ExtractionField[],
-): void {
-  if (typeof window === 'undefined') return
-  try {
-    const value: StoredExtraction = {
-      fields,
-      updatedAt: new Date().toISOString(),
-    }
-    window.sessionStorage.setItem(storageKey(documentId, method), JSON.stringify(value))
-  } catch {
-    // La extracción sigue funcionando aunque el almacenamiento de sesión esté lleno.
-  }
-}
-
-function clearStoredExtraction(documentId: string, method: ExtractionMethod): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.sessionStorage.removeItem(storageKey(documentId, method))
-  } catch {
-    // No bloquea el restablecimiento del formulario.
-  }
-}
-
->>>>>>> origin/cambiossosme
 export function useExtraction(
   document: PolicyDocument | null,
   method: ExtractionMethod,
@@ -107,20 +55,13 @@ export function useExtraction(
   attachmentError: string | null,
   initialFields: ExtractionField[] | null = null,
 ) {
-<<<<<<< Updated upstream
-  const [fields, setFields] = useState<ExtractionField[]>([])
-<<<<<<< HEAD
-=======
   const [documentFields, setDocumentFields] = useState<DocumentFields>({
     documentId: null,
+    method: null,
     fields: [],
   })
   const fields = documentFields.fields
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null)
->>>>>>> Stashed changes
-=======
-  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null)
->>>>>>> origin/cambiossosme
   const [runState, dispatch] = useReducer(
     reduceExtractionRunState,
     initialExtractionRunState,
@@ -129,6 +70,7 @@ export function useExtraction(
   const [savedFields, setSavedFields] = useState<ExtractionField[] | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [persistNotice, setPersistNotice] = useState<string | null>(null)
 
   const requestIdRef = useRef(0)
   const busyRef = useRef(false)
@@ -146,17 +88,11 @@ export function useExtraction(
     dispatch({ type: 'reset' })
     setLastRunAt(null)
     setFallbackNotice(null)
+    setPersistNotice(null)
     if (!document) {
-      setDocumentFields({ documentId: null, fields: [] })
+      setDocumentFields({ documentId: null, method: null, fields: [] })
       return
     }
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-    // El método manual reconstruye los campos; Gemini parte vacío y espera
-    // a que el usuario adjunte un documento y ejecute la extracción.
-    setFields(method === 'manual' ? buildManualFields(document) : [])
-  }, [document, method, attachment, invalidate])
-=======
     const stored = readStoredExtraction(document.id, method, getSessionStorage())
     const resolution = resolveInitialFields({
       documentId: document.id,
@@ -166,7 +102,13 @@ export function useExtraction(
       initialFields: initialFields ?? null,
       blankManualFields: method === 'manual' ? buildManualFields(document) : [],
     })
-    setDocumentFields({ documentId: resolution.documentId, fields: resolution.fields })
+    // Los campos quedan etiquetados con el método que los produce: es lo que
+    // impide que un resultado se guarde bajo el método anterior.
+    setDocumentFields({
+      documentId: resolution.documentId,
+      method: resolution.method,
+      fields: resolution.fields,
+    })
     if (resolution.source === 'manual-restored' || resolution.source === 'stored') {
       setSavedFields(resolution.fields.slice())
       setSavedAt(stored?.updatedAt ?? null)
@@ -180,44 +122,82 @@ export function useExtraction(
     } else if (resolution.source === 'initial') {
       dispatch({ type: 'succeed' })
       setLastRunAt(new Date().toISOString())
-=======
-    const stored = readStoredExtraction(document.id, method)
-    // El método manual reconstruye los campos; una extracción de Gmail puede
-    // llegar ya resuelta desde la bandeja de entrada.
-    if (method === 'manual') {
-      setFields(buildManualFields(document))
-    } else if (attachment) {
-      // Un archivo nuevo invalida el resultado previo del documento de Gmail.
-      setFields([])
-    } else if (stored?.fields.length) {
-      setFields(stored.fields)
-      dispatch({ type: 'succeed' })
-      setLastRunAt(stored.updatedAt)
-    } else if (initialFields?.length) {
-      setFields(initialFields)
-      dispatch({ type: 'succeed' })
-      setLastRunAt(new Date().toISOString())
-    } else {
-      setFields([])
->>>>>>> origin/cambiossosme
     }
   }, [document, method, attachment, initialFields, invalidate])
 
   useEffect(() => {
-<<<<<<< HEAD
     if (!document) return
-    // Solo se persisten campos que pertenecen al documento activo. Así, durante
-    // la transición A → B el efecto no puede guardar los campos de A bajo el ID
-    // de B, aunque el estado de React aún no se haya actualizado.
-    if (!shouldPersistExtraction(document.id, runState.status, documentFields)) return
-    writeStoredExtraction(document.id, method, documentFields.fields, getSessionStorage())
+    // Solo se persisten campos que pertenecen al documento activo Y al método
+    // activo. Así, durante la transición de método (por ejemplo Gemini →
+    // manual) el efecto no puede guardar el resultado de Gemini bajo el método
+    // manual, aunque el estado de React aún no se haya actualizado.
+    if (!shouldPersistExtraction(document.id, runState.status, documentFields, method)) return
+    const now = new Date().toISOString()
+    writeStoredExtraction(document.id, method, documentFields.fields, getSessionStorage(), now)
+    // Réplica en el backend; el fallo se avisa sin perder la copia local.
+    void saveDocumentExtraction(document.id, method, documentFields.fields, now)
+      .then(() => {
+        setPersistNotice(null)
+      })
+      .catch(() => {
+        setPersistNotice(
+          'No se pudo guardar la extracción en el servidor. Los datos se conservaron en esta sesión.',
+        )
+      })
   }, [document, method, documentFields, runState.status])
->>>>>>> Stashed changes
-=======
-    if (!document || runState.status !== 'done' || fields.length === 0) return
-    storeExtraction(document.id, method, fields)
-  }, [document, method, fields, runState.status])
->>>>>>> origin/cambiossosme
+
+  // Lee primero el backend y, solo si allí no hay nada, migra una copia
+  // identificable de sessionStorage sin descartarla hasta verificarla.
+  useEffect(() => {
+    if (!document) return
+    let cancelled = false
+    const targetId = document.id
+    void (async () => {
+      const backend = await getDocumentExtractions(targetId).catch(() => null)
+      if (cancelled || backend === null) return
+      const remote = backend[method]
+      // Un resultado de Gemini guardado bajo la clave manual no se adopta:
+      // se hydrataría como si fuera una captura manual.
+      if (
+        remote &&
+        Array.isArray(remote.fields) &&
+        remote.fields.length > 0 &&
+        canAdoptAsMethod(method, remote.fields)
+      ) {
+        setDocumentFields({ documentId: targetId, method, fields: remote.fields })
+        setSavedFields(remote.fields.slice())
+        setSavedAt(remote.updatedAt)
+        dispatch({ type: 'succeed' })
+        setLastRunAt(remote.updatedAt)
+        return
+      }
+      const stored = readStoredExtraction(targetId, method, getSessionStorage())
+      const decision = decideSessionMigration({
+        sessionExtraction: stored,
+        backendExtraction: null,
+        documentId: targetId,
+        knownRemoteIds: new Set([targetId]),
+        method,
+      })
+      if (decision !== 'migrate' || !stored) return
+      const saved = await saveDocumentExtraction(targetId, method, stored.fields, stored.updatedAt)
+        .catch(() => null)
+      if (cancelled) return
+      if (!saved) {
+        // Solo se migra cuando el backend ya conoce el documento; un fallo
+        // aquí es inesperado y no debe perderse en silencio.
+        setPersistNotice(
+          'No se pudo migrar la extracción guardada en esta sesión al servidor. La copia local se conserva.',
+        )
+        return
+      }
+      const verify = await getDocumentExtractions(targetId).catch(() => null)
+      if (!cancelled && verify && verify[method]) {
+        clearStoredExtraction(targetId, method, getSessionStorage())
+      }
+    })()
+    return () => { cancelled = true }
+  }, [document, method])
 
   const updateField = useCallback((key: string, value: string) => {
     setDocumentFields((current) => ({
@@ -263,11 +243,6 @@ export function useExtraction(
     }))
   }, [])
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-  const runGemini = useCallback(async () => {
-    if (method !== 'gemini' || !document || !attachment || attachmentError) return
-=======
   const isDirty = useCallback(() => {
     if (method !== 'manual') return false
     const current = fields
@@ -299,12 +274,25 @@ export function useExtraction(
   const save = useCallback(async () => {
     if (!document) return false
     if (method !== 'manual') return false
+    // Solo se guarda el resultado que pertenece al documento y al método
+    // activos: un estado heredado de otro método nunca se escribe.
+    if (documentFields.documentId !== document.id || documentFields.method !== method) {
+      return false
+    }
     const storage = getSessionStorage()
     if (!storage) return false
     try {
       setIsSaving(true)
       const now = new Date().toISOString()
       writeStoredExtraction(document.id, method, fields, storage, now)
+      const remote = await saveDocumentExtraction(document.id, method, fields, now)
+        .then(() => true)
+        .catch(() => false)
+      setPersistNotice(
+        remote
+          ? null
+          : 'No se pudo guardar la extracción en el servidor. Los datos se conservaron en esta sesión.',
+      )
       setSavedFields(fields.slice())
       setSavedAt(now)
       return true
@@ -313,10 +301,8 @@ export function useExtraction(
     } finally {
       setIsSaving(false)
     }
-  }, [document, method, fields])
+  }, [document, method, fields, documentFields.documentId, documentFields.method])
 
-=======
->>>>>>> origin/cambiossosme
   const runExtraction = useCallback(async () => {
     if (
       !document ||
@@ -324,10 +310,6 @@ export function useExtraction(
       (!attachment && !document.downloadUrl) ||
       runState.status === 'done'
     ) return
-<<<<<<< HEAD
->>>>>>> Stashed changes
-=======
->>>>>>> origin/cambiossosme
     if (busyRef.current) return
 
     busyRef.current = true
@@ -339,16 +321,8 @@ export function useExtraction(
     abortRef.current = controller
 
     dispatch({ type: 'start' })
-<<<<<<< Updated upstream
-    setFields([])
-<<<<<<< HEAD
-=======
-    setDocumentFields({ documentId: document.id, fields: [] })
+    setDocumentFields({ documentId: document.id, method, fields: [] })
     setFallbackNotice(null)
->>>>>>> Stashed changes
-=======
-    setFallbackNotice(null)
->>>>>>> origin/cambiossosme
 
     let sourceFile: File | null = null
     try {
@@ -364,24 +338,11 @@ export function useExtraction(
             { signal: controller.signal },
           )).fields
       if (requestIdRef.current !== requestId) return
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-      setFields(result.fields)
-=======
-      setDocumentFields({ documentId: document.id, fields })
->>>>>>> Stashed changes
-=======
-      setFields(fields)
->>>>>>> origin/cambiossosme
+      setDocumentFields({ documentId: document.id, method, fields })
       dispatch({ type: 'succeed' })
       setLastRunAt(new Date().toISOString())
     } catch (error) {
       if (requestIdRef.current !== requestId) return
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> origin/cambiossosme
       const canUseLocalFallback =
         method === 'gemini' &&
         sourceFile &&
@@ -392,11 +353,7 @@ export function useExtraction(
         try {
           const localFields = await extractWithRules(sourceFile, { signal: controller.signal }, document.policyType)
           if (requestIdRef.current !== requestId) return
-<<<<<<< HEAD
-          setDocumentFields({ documentId: document.id, fields: localFields })
-=======
-          setFields(localFields)
->>>>>>> origin/cambiossosme
+          setDocumentFields({ documentId: document.id, method, fields: localFields })
           setFallbackNotice('Gemini no está disponible. Se aplicó extracción local; revisa y edita los campos antes de guardar.')
           dispatch({ type: 'succeed' })
           setLastRunAt(new Date().toISOString())
@@ -405,10 +362,6 @@ export function useExtraction(
           // Conserva el error original si el extractor local tampoco responde.
         }
       }
-<<<<<<< HEAD
->>>>>>> Stashed changes
-=======
->>>>>>> origin/cambiossosme
       const message =
         error instanceof ExtractionServiceError
           ? error.message
@@ -421,14 +374,16 @@ export function useExtraction(
 
   const reset = useCallback(() => {
     invalidate()
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-    dispatch({ type: 'reset' })
-    setLastRunAt(null)
-    setFields(document && method === 'manual' ? buildManualFields(document) : [])
-  }, [invalidate, document, method])
-=======
-    if (document) clearStoredExtraction(document.id, method, getSessionStorage())
+    if (document) {
+      // Regla de eliminación: solo se borra la copia de sesión del método
+      // activo (documentId + método). El resultado del otro método no se
+      // toca nunca y la copia guardada en el servidor se conserva, porque
+      // "Restablecer" sirve para volver a ejecutar la extracción y no debe
+      // perder una captura ya guardada. El borrado del servidor
+      // (deleteDocumentExtraction) sigue siendo una acción explícita y
+      // acotada a (documentId, método).
+      clearStoredExtraction(document.id, method, getSessionStorage())
+    }
     dispatch({ type: 'reset' })
     setLastRunAt(null)
     setFallbackNotice(null)
@@ -436,20 +391,12 @@ export function useExtraction(
     setSavedAt(null)
     setDocumentFields({
       documentId: document?.id ?? null,
+      method,
       fields: document && method === 'manual'
         ? buildManualFields(document)
         : initialFields ?? [],
     })
   }, [invalidate, document, method, initialFields])
->>>>>>> Stashed changes
-=======
-    if (document) clearStoredExtraction(document.id, method)
-    dispatch({ type: 'reset' })
-    setLastRunAt(null)
-    setFallbackNotice(null)
-    setFields(document && method === 'manual' ? buildManualFields(document) : initialFields ?? [])
-  }, [invalidate, document, method, initialFields])
->>>>>>> origin/cambiossosme
 
   const grouped = useMemo(() => groupFields(fields), [fields])
   const summary = useMemo(() => summarizeExtraction(fields), [fields])
@@ -479,6 +426,7 @@ export function useExtraction(
     status: runState.status,
     error: runState.error,
     fallbackNotice,
+    persistNotice,
     isExtracting,
     canRun,
     lastRunAt,
